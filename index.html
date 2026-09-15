@@ -2281,7 +2281,7 @@ class NetworkManager {
   }
 
   connect(url, name, room) {
-    this.url = url;
+    this.url = 'wss://threed-multiplayer-server.onrender.com';
     this.name = name;
     this.room = room || '';
     this._shouldReconnect = true;
