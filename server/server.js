@@ -21,7 +21,8 @@ const PORT = process.env.PORT || 8080;
 const MAX_PLAYERS = 8;
 const TICK_HZ = 15;
 const STALE_CONNECTION_MS = 20000; // kill sockets that go silent this long
-const RESPAWN_DELAY_MS = 3000;
+const PLAYER_RESPAWN_DELAY_MS = 3000;
+const BOT_RESPAWN_DELAY_MS = 5000;
 const ATTACK_RANGE_LENIENCY = 1.6; // meters of slack for latency/interpolation
 
 // Mirrors WEAPON_DATABASE in index.html. Keep these two in sync.
@@ -39,6 +40,17 @@ const SPAWN_POINTS = [
   [0, 2, 6], [10, 2, -10], [-10, 2, 10], [15, 2, 5],
   [-15, 2, -5], [0, 2, -20], [-6, 2, -12], [8, 2, 12],
 ];
+
+// Mirrors World._buildDemoEnemies()'s fixed positions/ids in index.html —
+// every room's bots start here so the client's static geometry lines up
+// with the server's authoritative state from the very first tick.
+const BOT_SPAWNS = [
+  { id: 'bot_0', x: -8, z: -10 },
+  { id: 'bot_1', x: 12, z: -14 },
+  { id: 'bot_2', x: 0, z: 14 },
+];
+const BOT_PATROL_RADIUS = 4;
+const BOT_ANGULAR_SPEED = 0.4; // rad/s
 
 /** @type {Map<string, Room>} */
 const rooms = new Map();
@@ -61,6 +73,17 @@ class Room {
     this.code = code;
     this.players = new Map(); // id -> PlayerState
     this.collected = new Set(); // pickup ids already granted to someone
+    this.bots = new Map(); // id -> BotState — server-authoritative
+    for (const spawn of BOT_SPAWNS) {
+      this.bots.set(spawn.id, {
+        id: spawn.id,
+        centerX: spawn.x, centerZ: spawn.z,
+        x: spawn.x, y: 0, z: spawn.z, yaw: 0,
+        health: 100, maxHealth: 100, alive: true,
+        phase: Math.random() * Math.PI * 2,
+        lastAttack: new Map(), // in case bots ever get their own attacks later
+      });
+    }
   }
 
   broadcast(msg, exceptId) {
@@ -80,7 +103,24 @@ class Room {
     return {
       id: p.id, name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw,
       health: p.health, maxHealth: p.maxHealth, alive: p.alive, weaponId: p.weaponId,
+      crouching: !!p.crouching, dashing: !!p.dashing, grounded: p.grounded !== false,
     };
+  }
+
+  publicBotState(b) {
+    return { id: b.id, x: b.x, y: b.y, z: b.z, yaw: b.yaw, health: b.health, maxHealth: b.maxHealth, alive: b.alive };
+  }
+
+  // Simple deterministic circular patrol — enough to make "sync bot
+  // position" meaningful without needing real pathfinding/navmesh work.
+  tickBots(now) {
+    for (const bot of this.bots.values()) {
+      if (!bot.alive) continue;
+      const angle = (now / 1000) * BOT_ANGULAR_SPEED + bot.phase;
+      bot.x = bot.centerX + Math.cos(angle) * BOT_PATROL_RADIUS;
+      bot.z = bot.centerZ + Math.sin(angle) * BOT_PATROL_RADIUS;
+      bot.yaw = angle + Math.PI / 2;
+    }
   }
 }
 
@@ -153,6 +193,7 @@ function onHello(ws, conn, msg) {
     id, ws, room, name: String(msg.name || 'Player').slice(0, 16).trim() || 'Player',
     x: sx, y: sy, z: sz, yaw: 0,
     health: 100, maxHealth: 100, alive: true, weaponId: null,
+    crouching: false, dashing: false, grounded: true,
     lastAttack: new Map(), // weaponKey -> timestamp
     lastStateTime: Date.now(),
   };
@@ -165,6 +206,7 @@ function onHello(ws, conn, msg) {
     id,
     room: room.code,
     players: [...room.players.values()].filter((p) => p.id !== id).map(room.publicState.bind(room)),
+    bots: [...room.bots.values()].map(room.publicBotState.bind(room)),
     collected: [...room.collected],
   }));
 
@@ -196,6 +238,9 @@ function onState(conn, msg) {
     player.yaw = msg.yaw;
   }
   if (typeof msg.weaponId !== 'undefined') player.weaponId = msg.weaponId;
+  if (typeof msg.crouching === 'boolean') player.crouching = msg.crouching;
+  if (typeof msg.dashing === 'boolean') player.dashing = msg.dashing;
+  if (typeof msg.grounded === 'boolean') player.grounded = msg.grounded;
 }
 
 function weaponTable(weaponId) {
@@ -206,8 +251,10 @@ function onAttack(conn, msg) {
   const attacker = getPlayer(conn);
   if (!attacker || !attacker.alive) return;
   const room = conn.room;
-  const target = room.players.get(msg.targetId);
-  if (!target || !target.alive || target.id === attacker.id) return;
+  const isBotTarget = room.bots.has(msg.targetId);
+  const target = isBotTarget ? room.bots.get(msg.targetId) : room.players.get(msg.targetId);
+  if (!target || !target.alive) return;
+  if (!isBotTarget && target.id === attacker.id) return;
 
   const weapon = weaponTable(msg.weaponId);
   const weaponKey = msg.weaponId || 'unarmed';
@@ -229,17 +276,28 @@ function onAttack(conn, msg) {
     damage, targetHealth: target.health, headshot: bodyPart === 'head',
   });
 
-  if (target.health <= 0) {
-    target.alive = false;
-    room.broadcast({ t: 'death', id: target.id, killerId: attacker.id, respawnDelay: RESPAWN_DELAY_MS });
+  if (target.health > 0) return;
+  target.alive = false;
+
+  if (isBotTarget) {
+    room.broadcast({ t: 'bot-death', id: target.id, killerId: attacker.id, respawnDelay: BOT_RESPAWN_DELAY_MS });
     setTimeout(() => {
-      if (!room.players.has(target.id)) return; // left before respawn
-      const [rx, ry, rz] = randomSpawn();
-      target.x = rx; target.y = ry; target.z = rz;
+      if (!room.bots.has(target.id)) return; // room gone before respawn
+      target.x = target.centerX; target.z = target.centerZ; target.y = 0;
       target.health = target.maxHealth; target.alive = true;
-      room.broadcast({ t: 'respawn', id: target.id, x: rx, y: ry, z: rz });
-    }, RESPAWN_DELAY_MS);
+      room.broadcast({ t: 'bot-respawn', id: target.id, x: target.x, y: target.y, z: target.z });
+    }, BOT_RESPAWN_DELAY_MS);
+    return;
   }
+
+  room.broadcast({ t: 'death', id: target.id, killerId: attacker.id, respawnDelay: PLAYER_RESPAWN_DELAY_MS });
+  setTimeout(() => {
+    if (!room.players.has(target.id)) return; // left before respawn
+    const [rx, ry, rz] = randomSpawn();
+    target.x = rx; target.y = ry; target.z = rz;
+    target.health = target.maxHealth; target.alive = true;
+    room.broadcast({ t: 'respawn', id: target.id, x: rx, y: ry, z: rz });
+  }, PLAYER_RESPAWN_DELAY_MS);
 }
 
 function onPickup(conn, msg) {
@@ -279,11 +337,16 @@ function onDisconnect(conn) {
 }
 
 // Periodic state broadcast, independent of how often clients send updates.
+// Also where bot patrol positions actually advance — bots only move (and
+// only get broadcast) in rooms that currently have at least one player.
 setInterval(() => {
+  const now = Date.now();
   for (const room of rooms.values()) {
     if (room.players.size === 0) continue;
+    room.tickBots(now);
     const players = [...room.players.values()].map(room.publicState.bind(room));
-    room.broadcast({ t: 'state-batch', players });
+    const bots = [...room.bots.values()].map(room.publicBotState.bind(room));
+    room.broadcast({ t: 'state-batch', players, bots });
   }
 }, 1000 / TICK_HZ);
 
