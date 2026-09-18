@@ -469,6 +469,9 @@ html, body {
 #mp-lobby #mp-player-list { list-style: none; margin-top: 8px; font-size: 12px; max-height: 140px; overflow-y: auto; }
 #mp-lobby #mp-player-list li { padding: 3px 0; opacity: 0.85; border-bottom: 1px solid rgba(255,255,255,0.06); }
 #mp-lobby #mp-server-row { margin-top: 10px; }
+#mp-profile-summary { font-size: 12px; text-align: center; margin-bottom: 10px; color: #9dffb0; }
+#mp-friends-list li { padding: 2px 0; opacity: 0.85; }
+#mp-google-btn { background: rgba(255,255,255,0.12) !important; }
 
 #mp-status {
   position: absolute;
@@ -623,24 +626,51 @@ html, body {
     <div id="mp-lobby">
       <div class="mp-box">
         <h2>MULTIPLAYER</h2>
-        <label for="mp-server-input">Server address</label>
-        <input id="mp-server-input" type="text" placeholder="wss://your-server.example.com" style="text-transform:none;" />
-        <label for="mp-name-input">Your name</label>
-        <input id="mp-name-input" type="text" placeholder="Player" maxlength="16" />
-        <label for="mp-room-input">Room code (leave blank to create one)</label>
-        <input id="mp-room-input" type="text" placeholder="e.g. AB3F" maxlength="6" />
-        <div class="mp-row">
-          <button id="mp-create-btn">CREATE ROOM</button>
-          <button id="mp-join-btn" class="secondary">JOIN ROOM</button>
+
+        <div id="mp-login-view">
+          <div id="mp-profile-summary" style="display:none;"></div>
+          <div class="mp-row">
+            <button id="mp-google-btn">SIGN IN WITH GOOGLE</button>
+          </div>
+          <label for="mp-guest-name-input">Or play as a guest</label>
+          <input id="mp-guest-name-input" type="text" placeholder="Your name" maxlength="16" style="text-transform:none;" />
+          <div class="mp-row">
+            <button id="mp-guest-btn" class="secondary">CONTINUE AS GUEST</button>
+          </div>
+          <div id="mp-login-error" style="color:#ff6b6b;font-size:12px;margin-top:8px;min-height:14px;"></div>
         </div>
-        <div class="mp-row">
-          <button id="mp-solo-btn" class="secondary">PLAY SOLO (OFFLINE)</button>
-        </div>
-        <div id="mp-error"></div>
-        <div id="mp-room-info" style="display:none;">
-          <div>Room code — share with friends:</div>
-          <div id="mp-room-code-display">----</div>
-          <ul id="mp-player-list"></ul>
+
+        <div id="mp-room-view" style="display:none;">
+          <div id="mp-friends-panel" style="font-size:11px; opacity:0.85; margin-bottom:10px; display:none;">
+            <div>Your ID (share so friends can add you):</div>
+            <div id="mp-my-uid" style="font-family:monospace; word-break:break-all; color:#ffcc33; margin:4px 0;"></div>
+            <div style="display:flex; gap:6px; margin-top:4px;">
+              <input id="mp-friend-uid-input" type="text" placeholder="Friend's ID" style="text-transform:none; flex:1; padding:6px;" />
+              <button id="mp-add-friend-btn" class="secondary" style="flex:0 0 auto; padding:6px 10px;">ADD</button>
+            </div>
+            <ul id="mp-friends-list" style="list-style:none; margin-top:6px; max-height:70px; overflow-y:auto;"></ul>
+            <div id="mp-friend-error" style="color:#ff6b6b; margin-top:4px;"></div>
+          </div>
+
+          <label for="mp-server-input">Server address</label>
+          <input id="mp-server-input" type="text" placeholder="wss://your-server.example.com" style="text-transform:none;" />
+          <label for="mp-name-input">Your name</label>
+          <input id="mp-name-input" type="text" placeholder="Player" maxlength="16" />
+          <label for="mp-room-input">Room code (leave blank to create one)</label>
+          <input id="mp-room-input" type="text" placeholder="e.g. AB3F" maxlength="6" />
+          <div class="mp-row">
+            <button id="mp-create-btn">CREATE ROOM</button>
+            <button id="mp-join-btn" class="secondary">JOIN ROOM</button>
+          </div>
+          <div class="mp-row">
+            <button id="mp-solo-btn" class="secondary">PLAY SOLO (OFFLINE)</button>
+          </div>
+          <div id="mp-error"></div>
+          <div id="mp-room-info" style="display:none;">
+            <div>Room code — share with friends:</div>
+            <div id="mp-room-code-display">----</div>
+            <ul id="mp-player-list"></ul>
+          </div>
         </div>
       </div>
     </div>
@@ -656,6 +686,159 @@ html, body {
 
   <script type="module">
 import * as THREE from 'three';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
+import {
+  getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously,
+  onAuthStateChanged, updateProfile,
+} from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
+import {
+  getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion,
+} from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
+
+// ============================================================================
+// FIREBASE — persistent account data only (login, profile, saved inventory,
+// stats, friends, room discovery). Never touched for frame-by-frame
+// movement or combat — that all stays on the WebSocket path above.
+//
+// Fill in your own project's config (Firebase console → Project settings →
+// General → "Your apps" → SDK setup and configuration). Until you do, the
+// game still runs fine — every Firebase call below fails soft into a local
+// guest profile so login/stats/friends are simply unavailable.
+// ============================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyBi4nO7pNlb8X8_EwtqqOkQnONsiUlDpgw",
+  authDomain: "streaming-world-787bd.firebaseapp.com",
+  projectId: "streaming-world-787bd",
+  storageBucket: "streaming-world-787bd.firebasestorage.app",
+  messagingSenderId: "795428196597",
+  appId: "1:795428196597:web:64e2615726a479668df5bc"
+};
+let fbApp = null, fbAuth = null, fbDb = null, fbReady = false;
+try {
+  fbApp = initializeApp(firebaseConfig);
+  fbAuth = getAuth(fbApp);
+  fbDb = getFirestore(fbApp);
+  fbReady = firebaseConfig.apiKey !== 'YOUR_API_KEY';
+} catch (err) {
+  console.warn('Firebase failed to initialize — login/profile features disabled.', err);
+}
+
+class FirebaseManager {
+  constructor() {
+    this.user = null;
+    this.profile = null; // { displayName, stats:{kills,deaths}, inventory:[...], friends:[...] }
+    this._listeners = new Map();
+    this._saveTimer = null;
+    if (fbReady) {
+      onAuthStateChanged(fbAuth, (user) => this._onAuthChanged(user));
+    }
+  }
+
+  on(event, fn) {
+    if (!this._listeners.has(event)) this._listeners.set(event, []);
+    this._listeners.get(event).push(fn);
+  }
+  _emit(event, payload) { for (const fn of this._listeners.get(event) || []) fn(payload); }
+
+  async _onAuthChanged(user) {
+    if (!user) { this.user = null; this.profile = null; this._emit('signedOut'); return; }
+    this.user = user;
+    try {
+      await this._loadOrCreateProfile();
+      this._emit('signedIn', this.profile);
+    } catch (err) {
+      this._emit('error', { message: 'Could not load your profile: ' + err.message });
+    }
+  }
+
+  async signInGoogle() {
+    if (!fbReady) throw new Error('Firebase is not configured yet — add your project keys, or continue as a guest.');
+    await signInWithPopup(fbAuth, new GoogleAuthProvider());
+  }
+
+  async signInGuest(name) {
+    const displayName = (name || 'Guest').slice(0, 16);
+    if (!fbReady) {
+      // No Firebase project configured — fully local guest profile so the
+      // game still works end-to-end without any backend account system.
+      this.user = { uid: 'guest_' + Math.random().toString(36).slice(2, 10), displayName, isGuest: true };
+      this.profile = { displayName, stats: { kills: 0, deaths: 0 }, inventory: [], friends: [] };
+      this._emit('signedIn', this.profile);
+      return;
+    }
+    const cred = await signInAnonymously(fbAuth);
+    await updateProfile(cred.user, { displayName });
+    // onAuthStateChanged fires next and loads/creates the Firestore profile.
+  }
+
+  async _loadOrCreateProfile() {
+    if (!fbDb || !this.user) return;
+    const ref = doc(fbDb, 'players', this.user.uid);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      this.profile = snap.data();
+    } else {
+      this.profile = {
+        displayName: this.user.displayName || 'Player', createdAt: Date.now(),
+        stats: { kills: 0, deaths: 0 }, inventory: [], friends: [],
+      };
+      await setDoc(ref, this.profile);
+    }
+  }
+
+  _canPersist() { return fbDb && this.user && !this.user.isGuest; }
+
+  // Event-driven, occasional writes only — never per-frame or per-tick.
+  async recordKill() {
+    if (!this.profile) return;
+    this.profile.stats.kills++;
+    if (!this._canPersist()) return;
+    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { 'stats.kills': this.profile.stats.kills }); } catch (err) { console.warn(err); }
+  }
+  async recordDeath() {
+    if (!this.profile) return;
+    this.profile.stats.deaths++;
+    if (!this._canPersist()) return;
+    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { 'stats.deaths': this.profile.stats.deaths }); } catch (err) { console.warn(err); }
+  }
+
+  // Debounced a few seconds — occasional account sync, not gameplay traffic.
+  saveInventory(weaponIds) {
+    if (!this.profile) return;
+    this.profile.inventory = weaponIds;
+    if (!this._canPersist()) return;
+    clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(async () => {
+      try { await updateDoc(doc(fbDb, 'players', this.user.uid), { inventory: weaponIds }); } catch (err) { console.warn(err); }
+    }, 2500);
+  }
+
+  async addFriendByUid(uid) {
+    uid = (uid || '').trim();
+    if (!uid) return;
+    if (!this._canPersist()) throw new Error('Sign in with Google to add friends.');
+    if (uid === this.user.uid) throw new Error("That's your own ID.");
+    const friendSnap = await getDoc(doc(fbDb, 'players', uid));
+    if (!friendSnap.exists()) throw new Error('No player found with that ID.');
+    const friendName = friendSnap.data().displayName || 'Player';
+    await updateDoc(doc(fbDb, 'players', this.user.uid), { friends: arrayUnion({ uid, name: friendName }) });
+    this.profile.friends = this.profile.friends || [];
+    this.profile.friends.push({ uid, name: friendName });
+  }
+
+  // Lightweight discovery record so a friend can see roughly where you are —
+  // NOT the source of truth for room membership (the WS server owns that).
+  async publishRoomPresence(code) {
+    if (!this._canPersist()) return;
+    try {
+      await setDoc(doc(fbDb, 'rooms', code), {
+        lastActive: Date.now(), hostUid: this.user.uid, hostName: this.profile?.displayName || 'Player',
+      }, { merge: true });
+    } catch (err) { console.warn(err); }
+  }
+}
+
+const firebaseManager = new FirebaseManager();
 
 const CONFIG = {
   world: { groundSize: 200, groundTextureRepeat: 40 },
@@ -742,7 +925,7 @@ const SKY_PRESETS = {
 };
 
 const USE_IMAGE_SKYBOX = true;
-const SKYBOX_PATH = 'skybox/';
+const SKYBOX_PATH = 'Skybox/'; // put back.png, bottom.png, front.png, left.png, right.png, top.png here
 const SKYBOX_FACES = ['right.png', 'left.png', 'top.png', 'bottom.png', 'front.png', 'back.png'];
 
 class Skybox {
@@ -989,11 +1172,13 @@ class World {
   }
 
   _buildDemoEnemies() {
+    // Fixed ids + order so every client and the server agree on which bot
+    // is which — required once bots become server-authoritative.
     const positions = [[-8, -10], [12, -14], [0, 14]];
-    for (const [x, z] of positions) this._spawnEnemy(x, z);
+    positions.forEach(([x, z], i) => this._spawnEnemy(x, z, 'bot_' + i));
   }
 
-  _spawnEnemy(x, z) {
+  _spawnEnemy(x, z, id) {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: 0xb33636, roughness: 0.6 });
     const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 4, 8), mat);
@@ -1009,7 +1194,11 @@ class World {
     const enemy = {
       mesh: group, headMesh: head, bodyMesh: torso,
       health: 100, maxHealth: 100, alive: true,
-      id: 'enemy_' + Math.random().toString(36).slice(2, 9), label: 'Hostile',
+      id: id || ('enemy_' + Math.random().toString(36).slice(2, 9)), label: 'Hostile',
+      // Interpolation target — harmless no-ops in solo play (target just
+      // equals spawn position); driven by server bot-state updates once a
+      // MultiplayerManager is active. See World.update().
+      targetPos: new THREE.Vector3(x, 0, z), targetYaw: 0, yaw: 0,
     };
     group.userData.entityType = 'enemy';
     group.userData.enemyRef = enemy;
@@ -1028,6 +1217,8 @@ class World {
     this.scene.remove(enemy.mesh);
     this.enemies = this.enemies.filter((e) => e !== enemy);
   }
+
+  getEnemyById(id) { return this.enemies.find((e) => e.id === id) || null; }
 
   _buildDemoPickups() {
     // Fixed ids (not random) so every client/server agrees on the same pickup
@@ -1083,6 +1274,19 @@ class World {
     for (const pickup of this.pickups) {
       pickup.mesh.position.y = pickup.baseY + Math.sin(elapsed * 2 + pickup.mesh.position.x) * 0.08;
       pickup.mesh.rotation.y += delta * 1.4;
+    }
+    for (const enemy of this.enemies) {
+      if (!enemy.alive) continue;
+      // Smoothly chase the last server-reported bot transform. In solo
+      // play targetPos never moves from the spawn point, so this is a no-op.
+      const lerpRate = 8;
+      enemy.mesh.position.x = THREE.MathUtils.damp(enemy.mesh.position.x, enemy.targetPos.x, lerpRate, delta);
+      enemy.mesh.position.z = THREE.MathUtils.damp(enemy.mesh.position.z, enemy.targetPos.z, lerpRate, delta);
+      let diff = enemy.targetYaw - enemy.yaw;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      enemy.yaw += diff * (1 - Math.exp(-lerpRate * delta));
+      enemy.mesh.rotation.y = enemy.yaw;
     }
   }
 
@@ -1909,17 +2113,28 @@ class AttackManager {
     this.multiplayer = null; // set by Game once MultiplayerManager exists
   }
 
-  // Hits against real remote players never apply damage locally — the
-  // server is authoritative over health/damage. We just report the swing
-  // (for the local swing animation / crosshair feedback) and forward the
-  // claimed hit to the server, which independently re-checks range,
+  // Hits against a real remote player, or against a bot once a
+  // MultiplayerManager is active, never apply damage locally — the server
+  // is authoritative over health/damage in multiplayer. We just report the
+  // swing (for the local swing animation / crosshair feedback) and forward
+  // the claimed hit to the server, which independently re-checks range,
   // cooldown and weapon damage before broadcasting the real result.
-  _reportRemoteHit(weaponId, info, now) {
+  _reportRemoteHit(weaponId, targetId, info, now) {
     this.bus.emit('attack-swing', { weapon: this.weapons.equipped });
     if (this.multiplayer && this.multiplayer.active) {
-      this.multiplayer.sendAttack({ targetId: info.remotePlayer.id, weaponId, bodyPart: info.bodyPart, clientTime: now });
+      this.multiplayer.sendAttack({ targetId, weaponId, bodyPart: info.bodyPart, clientTime: now });
     }
   }
+
+  // Solo/offline play keeps bots as simple local target dummies (original
+  // behavior); once in a multiplayer room, bots are server-authoritative
+  // just like other players, so their hits route over the network too.
+  _isNetworkedTarget(info) {
+    if (info.kind === 'remotePlayer') return true;
+    if (info.kind === 'enemy' && this.multiplayer && this.multiplayer.active) return true;
+    return false;
+  }
+  _targetIdOf(info) { return info.kind === 'remotePlayer' ? info.remotePlayer.id : info.enemy.id; }
 
   _getComboMultiplier() {
     // Only the first attack inside the post-dash window is doubled;
@@ -1940,7 +2155,7 @@ class AttackManager {
       this._lastUnarmedAttack = now;
       const hit = this.raycast.queryCenter(this.unarmedRange);
       const info = this.raycast.classifyHit(hit);
-      if (info.kind === 'remotePlayer') { this._reportRemoteHit(null, info, now); return; }
+      if (this._isNetworkedTarget(info)) { this._reportRemoteHit(null, this._targetIdOf(info), info, now); return; }
       let anyHit = null;
       if (info.kind === 'enemy') {
         const bonus = this._getComboMultiplier();
@@ -1955,7 +2170,7 @@ class AttackManager {
 
     const hit = this.raycast.queryCenter(weapon.range);
     const info = this.raycast.classifyHit(hit);
-    if (info.kind === 'remotePlayer') { weapon.lastAttackTime = now; this._reportRemoteHit(weapon.id, info, now); return; }
+    if (this._isNetworkedTarget(info)) { weapon.lastAttackTime = now; this._reportRemoteHit(weapon.id, this._targetIdOf(info), info, now); return; }
 
     weapon.lastAttackTime = now;
     let anyHit = null;
@@ -2281,7 +2496,7 @@ class NetworkManager {
   }
 
   connect(url, name, room) {
-    this.url = 'wss://threed-multiplayer-server.onrender.com';
+    this.url = url;
     this.name = name;
     this.room = room || '';
     this._shouldReconnect = true;
@@ -2380,6 +2595,15 @@ class RemotePlayer {
     this.mesh.position.copy(this.position);
     scene.add(this.mesh);
 
+    // Movement-state visuals synced alongside position (crouch/dash/jump).
+    // Actual vertical position already reflects jumping via `y`; these add
+    // a squash/stretch cue so the states read clearly at a glance too.
+    this.crouching = false;
+    this.dashing = false;
+    this.grounded = true;
+    this._scale = new THREE.Vector3(1, 1, 1);
+    this._targetScale = new THREE.Vector3(1, 1, 1);
+
     torso.userData.entityType = 'remotePlayer';
     torso.userData.remotePlayerRef = this;
     torso.userData.bodyPart = 'body';
@@ -2394,6 +2618,9 @@ class RemotePlayer {
     this._targetPos.set(state.x, state.y, state.z);
     this._targetYaw = state.yaw;
     if (typeof state.weaponId !== 'undefined') this.weaponId = state.weaponId;
+    if (typeof state.crouching === 'boolean') this.crouching = state.crouching;
+    if (typeof state.dashing === 'boolean') this.dashing = state.dashing;
+    if (typeof state.grounded === 'boolean') this.grounded = state.grounded;
     this._lastUpdateTime = performance.now();
   }
 
@@ -2406,12 +2633,14 @@ class RemotePlayer {
     this.alive = false;
     this.mesh.rotation.z = Math.PI / 2.2;
     this.mesh.position.y = 0.2;
+    this.mesh.scale.set(1, 1, 1);
   }
 
   playRespawn(x, y, z) {
     this.alive = true;
     this.health = this.maxHealth;
     this.mesh.rotation.z = 0;
+    this.mesh.scale.set(1, 1, 1);
     this.position.set(x, y, z);
     this._targetPos.set(x, y, z);
     this.mesh.position.copy(this.position);
@@ -2432,6 +2661,17 @@ class RemotePlayer {
     this.yaw += diff * (1 - Math.exp(-lerpRate * delta));
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = this.yaw;
+
+    // Squash for crouch, stretch for dash, small hop pop when airborne —
+    // purely cosmetic, driven by the movement flags in the last state update.
+    if (this.crouching) this._targetScale.set(1.1, 0.62, 1.1);
+    else if (this.dashing) this._targetScale.set(0.9, 0.95, 1.25);
+    else if (!this.grounded) this._targetScale.set(0.95, 1.08, 0.95);
+    else this._targetScale.set(1, 1, 1);
+    this._scale.x = THREE.MathUtils.damp(this._scale.x, this._targetScale.x, 10, delta);
+    this._scale.y = THREE.MathUtils.damp(this._scale.y, this._targetScale.y, 10, delta);
+    this._scale.z = THREE.MathUtils.damp(this._scale.z, this._targetScale.z, 10, delta);
+    this.mesh.scale.copy(this._scale);
   }
 
   dispose(scene) {
@@ -2452,6 +2692,12 @@ class MultiplayerManager {
 
     this._bindLobbyUI();
     this._bindNetworkEvents();
+
+    // Best-effort clean disconnect so other clients don't have to wait on
+    // the server's stale-connection timeout to remove us (avoids "ghost
+    // players" lingering in the map after a tab close / app background).
+    window.addEventListener('pagehide', () => this.net.disconnect());
+    window.addEventListener('beforeunload', () => this.net.disconnect());
   }
 
   // ---------- Lobby ----------
@@ -2474,6 +2720,66 @@ class MultiplayerManager {
     document.getElementById('mp-create-btn').addEventListener('click', () => this._attemptConnect(''));
     document.getElementById('mp-join-btn').addEventListener('click', () => this._attemptConnect((this.roomInput.value || '').trim().toUpperCase()));
     document.getElementById('mp-solo-btn').addEventListener('click', () => { this.lobbyEl.classList.add('hidden'); });
+
+    this._bindLoginUI();
+  }
+
+  // ---------- Firebase-backed login/profile/friends (account data only) ----------
+  _bindLoginUI() {
+    const loginErrorEl = document.getElementById('mp-login-error');
+    document.getElementById('mp-google-btn').addEventListener('click', async () => {
+      loginErrorEl.textContent = '';
+      try { await firebaseManager.signInGoogle(); } catch (err) { loginErrorEl.textContent = err.message; }
+    });
+    document.getElementById('mp-guest-btn').addEventListener('click', async () => {
+      loginErrorEl.textContent = '';
+      const name = document.getElementById('mp-guest-name-input').value.trim();
+      try { await firebaseManager.signInGuest(name); } catch (err) { loginErrorEl.textContent = err.message; }
+    });
+    document.getElementById('mp-add-friend-btn').addEventListener('click', async () => {
+      const errEl = document.getElementById('mp-friend-error');
+      const input = document.getElementById('mp-friend-uid-input');
+      errEl.textContent = '';
+      try { await firebaseManager.addFriendByUid(input.value); input.value = ''; this._renderFriendsList(); }
+      catch (err) { errEl.textContent = err.message; }
+    });
+
+    firebaseManager.on('signedIn', (profile) => this._onFirebaseSignedIn(profile));
+    firebaseManager.on('error', ({ message }) => { loginErrorEl.textContent = message; });
+
+    // If a session was already persisted (e.g. a page refresh after Google
+    // sign-in), FirebaseManager's onAuthStateChanged will fire 'signedIn'
+    // shortly after load without any click needed — the login view stays
+    // visible only until then.
+  }
+
+  _onFirebaseSignedIn(profile) {
+    document.getElementById('mp-login-view').style.display = 'none';
+    document.getElementById('mp-room-view').style.display = 'block';
+    if (!this.nameInput.value) this.nameInput.value = profile.displayName || 'Player';
+
+    const summary = document.getElementById('mp-profile-summary');
+    summary.style.display = 'block';
+    summary.textContent = `Signed in as ${profile.displayName} — Kills: ${profile.stats?.kills ?? 0}  Deaths: ${profile.stats?.deaths ?? 0}`;
+
+    if (firebaseManager.user && !firebaseManager.user.isGuest) {
+      document.getElementById('mp-friends-panel').style.display = 'block';
+      document.getElementById('mp-my-uid').textContent = firebaseManager.user.uid;
+      this._renderFriendsList();
+    }
+
+    // Restore any weapons the account had saved from a previous session.
+    for (const weaponId of (profile.inventory || [])) this.game.weaponManager.addWeapon(weaponId);
+  }
+
+  _renderFriendsList() {
+    const list = document.getElementById('mp-friends-list');
+    list.innerHTML = '';
+    for (const f of (firebaseManager.profile?.friends || [])) {
+      const li = document.createElement('li');
+      li.textContent = f.name;
+      list.appendChild(li);
+    }
   }
 
   _attemptConnect(roomCode) {
@@ -2508,10 +2814,12 @@ class MultiplayerManager {
     n.on('welcome', (msg) => this._onWelcome(msg));
     n.on('player-joined', (msg) => this._onPlayerJoined(msg.player));
     n.on('player-left', (msg) => this._onPlayerLeft(msg.id));
-    n.on('state-batch', (msg) => this._onStateBatch(msg.players));
+    n.on('state-batch', (msg) => this._onStateBatch(msg.players, msg.bots));
     n.on('attack-result', (msg) => this._onAttackResult(msg));
     n.on('death', (msg) => this._onDeath(msg));
     n.on('respawn', (msg) => this._onRespawn(msg));
+    n.on('bot-death', (msg) => this._onBotDeath(msg));
+    n.on('bot-respawn', (msg) => this._onBotRespawn(msg));
     n.on('pickup-collected', (msg) => this._onPickupCollected(msg));
     n.on('pickup-denied', (msg) => this._onPickupDenied(msg));
     n.on('weapon-dropped', (msg) => this._onWeaponDropped(msg));
@@ -2527,13 +2835,83 @@ class MultiplayerManager {
     this.roomCodeEl.textContent = msg.room;
     document.getElementById('local-health-wrap').classList.add('active');
 
+    // Defensive reconciliation: drop any remote player we're tracking that
+    // the server's fresh player list doesn't include (guards against a
+    // "ghost player" surviving a reconnect if an earlier player-left was
+    // somehow missed).
+    const incomingIds = new Set(msg.players.map((p) => p.id));
+    for (const id of [...this.remotePlayers.keys()]) {
+      if (!incomingIds.has(id)) this._onPlayerLeft(id);
+    }
+
     for (const p of msg.players) this._onPlayerJoined(p, /*silent*/ true);
+    this._seedBotState(msg.bots || []);
     for (const pickupId of (msg.collected || [])) {
       const pickup = this.game.world.getPickupById(pickupId);
       if (pickup) { pickup.collected = true; this.game.world.removePickup(pickup); }
     }
     this.game.raycastManager.markDirty();
     this._renderPlayerList();
+    firebaseManager.publishRoomPresence(msg.room);
+  }
+  // no interpolation here, so a bot that's already mid-patrol doesn't
+  // visibly slide in from its spawn point.
+  _seedBotState(bots) {
+    for (const b of bots) {
+      const enemy = this.game.world.getEnemyById(b.id);
+      if (!enemy) continue;
+      enemy.targetPos.set(b.x, b.y, b.z);
+      enemy.targetYaw = b.yaw;
+      enemy.yaw = b.yaw;
+      enemy.mesh.position.set(b.x, b.y, b.z);
+      enemy.mesh.rotation.y = b.yaw;
+      enemy.health = b.health;
+      enemy.maxHealth = b.maxHealth;
+      if (!b.alive && enemy.alive) {
+        enemy.alive = false;
+        enemy.mesh.rotation.z = Math.PI / 2.2;
+        enemy.mesh.position.y = 0.2;
+      }
+    }
+  }
+
+  _applyBotState(bots) {
+    for (const b of bots) {
+      const enemy = this.game.world.getEnemyById(b.id);
+      if (!enemy || !enemy.alive) continue;
+      enemy.targetPos.set(b.x, b.y, b.z);
+      enemy.targetYaw = b.yaw;
+      enemy.health = b.health;
+      enemy.maxHealth = b.maxHealth;
+    }
+  }
+
+  _flashEnemyHit(enemy) {
+    const mat = enemy.bodyMesh.material;
+    const originalEmissive = mat.emissive.getHex();
+    mat.emissive.setHex(0xff2222);
+    mat.emissiveIntensity = 0.9;
+    setTimeout(() => { mat.emissive.setHex(originalEmissive); mat.emissiveIntensity = 0; }, 90);
+  }
+
+  _onBotDeath({ id }) {
+    const enemy = this.game.world.getEnemyById(id);
+    if (!enemy) return;
+    enemy.alive = false;
+    enemy.mesh.rotation.z = Math.PI / 2.2;
+    enemy.mesh.position.y = 0.2;
+  }
+
+  _onBotRespawn({ id, x, y, z }) {
+    const enemy = this.game.world.getEnemyById(id);
+    if (!enemy) return;
+    enemy.alive = true;
+    enemy.health = enemy.maxHealth;
+    enemy.mesh.rotation.z = 0;
+    enemy.mesh.position.set(x, y, z);
+    enemy.targetPos.set(x, y, z);
+    enemy.yaw = 0;
+    enemy.targetYaw = 0;
   }
 
   _onPlayerJoined(p, silent) {
@@ -2565,30 +2943,35 @@ class MultiplayerManager {
     this._renderPlayerList();
   }
 
-  _onStateBatch(players) {
+  _onStateBatch(players, bots) {
     for (const s of players) {
       const rp = this.remotePlayers.get(s.id);
       if (rp) rp.applyServerState(s);
     }
+    this._applyBotState(bots || []);
   }
 
   _onAttackResult({ attackerId, targetId, damage, targetHealth, headshot }) {
     if (attackerId === this.localId) {
       this.game.bus.emit('hitmarker', { comboBonus: false });
       this.game.bus.emit('hit', { damage, headshot });
+      if (targetHealth <= 0 && targetId !== this.localId) firebaseManager.recordKill();
     }
     if (targetId === this.localId) {
       this.game.player.health = targetHealth;
       this.game.bus.emit('player-damaged', {});
-    } else {
-      const rp = this.remotePlayers.get(targetId);
-      if (rp) rp.setHealth(targetHealth);
+      return;
     }
+    const rp = this.remotePlayers.get(targetId);
+    if (rp) { rp.setHealth(targetHealth); return; }
+    const enemy = this.game.world.getEnemyById(targetId);
+    if (enemy) { enemy.health = targetHealth; this._flashEnemyHit(enemy); }
   }
 
   _onDeath({ id, respawnDelay }) {
     if (id === this.localId) {
       this.game.player.alive = false;
+      firebaseManager.recordDeath();
       const overlay = document.getElementById('death-overlay');
       const subEl = document.getElementById('death-sub-text');
       overlay.classList.add('show');
@@ -2674,6 +3057,20 @@ class MultiplayerManager {
     if (this.active) this._updateLabels(camera);
 
     if (!this.active) return;
+
+    // Defensive ghost-player sweep: if a remote player hasn't sent any
+    // state update in a while, the connection almost certainly dropped and
+    // the server's player-left broadcast was lost — remove it locally
+    // rather than leaving a frozen "ghost" standing in the world.
+    this._ghostCheckAccum = (this._ghostCheckAccum || 0) + delta;
+    if (this._ghostCheckAccum > 2) {
+      this._ghostCheckAccum = 0;
+      const now = performance.now();
+      for (const [id, rp] of [...this.remotePlayers.entries()]) {
+        if (now - rp._lastUpdateTime > 8000) this._onPlayerLeft(id);
+      }
+    }
+
     this._sendAccum += delta;
     const interval = 1 / NetworkManager.SEND_HZ;
     if (this._sendAccum >= interval) {
@@ -2681,7 +3078,7 @@ class MultiplayerManager {
       const p = this.game.player;
       this.net.sendState({
         x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw,
-        moving: p.currentSpeed > 0.1, dashing: p.isDashing, crouching: p.isCrouching,
+        moving: p.currentSpeed > 0.1, dashing: p.isDashing, crouching: p.isCrouching, grounded: p.grounded,
         weaponId: this.game.weaponManager.equipped ? this.game.weaponManager.equipped.id : null,
       });
     }
@@ -2754,6 +3151,9 @@ class Game {
     this.bus.on('death', () => this.raycastManager.markDirty());
     this.bus.on('pickup-collected', () => this.raycastManager.markDirty());
     this.bus.on('weapon-dropped', () => this.raycastManager.markDirty());
+    // Persist inventory to the signed-in account — debounced inside
+    // FirebaseManager, and a no-op entirely for guests/no Firebase project.
+    this.bus.on('inventory-changed', ({ inventory }) => firebaseManager.saveInventory(inventory.map((w) => w.id)));
 
     this.fpsCounter = document.getElementById('fps-counter');
     this._elapsed = 0;
