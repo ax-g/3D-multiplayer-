@@ -424,8 +424,7 @@ html, body {
   position: absolute;
   top: 0; left: 0;
   width: 100%; height: 100%;
-  background: rgba(8,9,12,0.88);
-  backdrop-filter: blur(6px);
+  background: rgba(8,9,12,0.94);
   z-index: 90;
   display: flex;
   align-items: center;
@@ -433,9 +432,12 @@ html, body {
   pointer-events: auto;
   color: #fff;
   font-family: 'Segoe UI', Arial, sans-serif;
-  transition: opacity 0.35s ease;
 }
-#mp-lobby.hidden { opacity: 0; pointer-events: none; }
+/* display:none (not just opacity) — a full-screen backdrop-filter left
+   merely at opacity:0 still gets composited every frame on most mobile
+   GPUs, which is what was tanking FPS to ~1 once the lobby was dismissed.
+   No blur, and fully removed from the render tree once hidden. */
+#mp-lobby.hidden { display: none; }
 #mp-lobby .mp-box {
   background: rgba(30,32,42,0.85);
   border: 1px solid rgba(255,255,255,0.12);
@@ -642,10 +644,10 @@ html, body {
 
         <div id="mp-room-view" style="display:none;">
           <div id="mp-friends-panel" style="font-size:11px; opacity:0.85; margin-bottom:10px; display:none;">
-            <div>Your ID (share so friends can add you):</div>
+            <div>Your Game ID (share so friends can add you):</div>
             <div id="mp-my-uid" style="font-family:monospace; word-break:break-all; color:#ffcc33; margin:4px 0;"></div>
             <div style="display:flex; gap:6px; margin-top:4px;">
-              <input id="mp-friend-uid-input" type="text" placeholder="Friend's ID" style="text-transform:none; flex:1; padding:6px;" />
+              <input id="mp-friend-uid-input" type="text" placeholder="e.g. AN4821" maxlength="6" style="text-transform:uppercase; flex:1; padding:6px;" />
               <button id="mp-add-friend-btn" class="secondary" style="flex:0 0 auto; padding:6px 10px;">ADD</button>
             </div>
             <ul id="mp-friends-list" style="list-style:none; margin-top:6px; max-height:70px; overflow-y:auto;"></ul>
@@ -688,11 +690,11 @@ html, body {
 import * as THREE from 'three';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup, signInAnonymously,
-  onAuthStateChanged, updateProfile,
+  getAuth, GoogleAuthProvider, signInWithPopup,
+  onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 import {
-  getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion,
+  getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore.js';
 
 // ============================================================================
@@ -713,6 +715,7 @@ const firebaseConfig = {
   messagingSenderId: "795428196597",
   appId: "1:795428196597:web:64e2615726a479668df5bc"
 };
+
 let fbApp = null, fbAuth = null, fbDb = null, fbReady = false;
 try {
   fbApp = initializeApp(firebaseConfig);
@@ -726,7 +729,7 @@ try {
 class FirebaseManager {
   constructor() {
     this.user = null;
-    this.profile = null; // { displayName, stats:{kills,deaths}, inventory:[...], friends:[...] }
+    this.profile = null; // { displayName, gameId, stats:{kills,deaths,xp}, inventory:[...], friends:[...] }
     this._listeners = new Map();
     this._saveTimer = null;
     if (fbReady) {
@@ -756,19 +759,14 @@ class FirebaseManager {
     await signInWithPopup(fbAuth, new GoogleAuthProvider());
   }
 
+  // Guests never touch Firebase at all — no anonymous-auth dependency, no
+  // network round trip, no way for a misconfigured/unconfigured project to
+  // block play. This always succeeds synchronously.
   async signInGuest(name) {
     const displayName = (name || 'Guest').slice(0, 16);
-    if (!fbReady) {
-      // No Firebase project configured — fully local guest profile so the
-      // game still works end-to-end without any backend account system.
-      this.user = { uid: 'guest_' + Math.random().toString(36).slice(2, 10), displayName, isGuest: true };
-      this.profile = { displayName, stats: { kills: 0, deaths: 0 }, inventory: [], friends: [] };
-      this._emit('signedIn', this.profile);
-      return;
-    }
-    const cred = await signInAnonymously(fbAuth);
-    await updateProfile(cred.user, { displayName });
-    // onAuthStateChanged fires next and loads/creates the Firestore profile.
+    this.user = { uid: 'guest_' + Math.random().toString(36).slice(2, 10), displayName, isGuest: true };
+    this.profile = { displayName, gameId: null, stats: { kills: 0, deaths: 0, xp: 0 }, inventory: [], friends: [] };
+    this._emit('signedIn', this.profile);
   }
 
   async _loadOrCreateProfile() {
@@ -777,10 +775,20 @@ class FirebaseManager {
     const snap = await getDoc(ref);
     if (snap.exists()) {
       this.profile = snap.data();
+      if (!this.profile.gameId) {
+        // Upgrade an older profile created before short game IDs existed.
+        try {
+          this.profile.gameId = await allocateGameId(this.user.email, this.user.displayName, this.user.uid);
+          await updateDoc(ref, { gameId: this.profile.gameId });
+        } catch (err) { console.warn('Could not allocate a game ID', err); }
+      }
     } else {
+      let gameId = null;
+      try { gameId = await allocateGameId(this.user.email, this.user.displayName, this.user.uid); }
+      catch (err) { console.warn('Could not allocate a game ID', err); }
       this.profile = {
-        displayName: this.user.displayName || 'Player', createdAt: Date.now(),
-        stats: { kills: 0, deaths: 0 }, inventory: [], friends: [],
+        displayName: this.user.displayName || 'Player', createdAt: Date.now(), gameId,
+        stats: { kills: 0, deaths: 0, xp: 0 }, inventory: [], friends: [],
       };
       await setDoc(ref, this.profile);
     }
@@ -792,8 +800,13 @@ class FirebaseManager {
   async recordKill() {
     if (!this.profile) return;
     this.profile.stats.kills++;
+    this.profile.stats.xp = (this.profile.stats.xp || 0) + 10;
     if (!this._canPersist()) return;
-    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { 'stats.kills': this.profile.stats.kills }); } catch (err) { console.warn(err); }
+    try {
+      await updateDoc(doc(fbDb, 'players', this.user.uid), {
+        'stats.kills': this.profile.stats.kills, 'stats.xp': this.profile.stats.xp,
+      });
+    } catch (err) { console.warn(err); }
   }
   async recordDeath() {
     if (!this.profile) return;
@@ -813,17 +826,25 @@ class FirebaseManager {
     }, 2500);
   }
 
-  async addFriendByUid(uid) {
-    uid = (uid || '').trim();
-    if (!uid) return;
+  // Friends are looked up by the short game ID (e.g. "AN4821"), not the
+  // long raw Firebase UID — see allocateGameId() below.
+  async addFriendByGameId(gameId) {
+    gameId = (gameId || '').trim().toUpperCase();
+    if (!gameId) return;
     if (!this._canPersist()) throw new Error('Sign in with Google to add friends.');
-    if (uid === this.user.uid) throw new Error("That's your own ID.");
+    if (gameId === this.profile.gameId) throw new Error("That's your own ID.");
+    const mapSnap = await getDoc(doc(fbDb, 'gameIds', gameId));
+    if (!mapSnap.exists()) throw new Error('No player found with that ID.');
+    const uid = mapSnap.data().uid;
     const friendSnap = await getDoc(doc(fbDb, 'players', uid));
     if (!friendSnap.exists()) throw new Error('No player found with that ID.');
+    if (friendSnap.data().gameId && (this.profile.friends || []).some((f) => f.uid === uid)) {
+      throw new Error('Already friends with that player.');
+    }
     const friendName = friendSnap.data().displayName || 'Player';
-    await updateDoc(doc(fbDb, 'players', this.user.uid), { friends: arrayUnion({ uid, name: friendName }) });
+    await updateDoc(doc(fbDb, 'players', this.user.uid), { friends: arrayUnion({ uid, gameId, name: friendName }) });
     this.profile.friends = this.profile.friends || [];
-    this.profile.friends.push({ uid, name: friendName });
+    this.profile.friends.push({ uid, gameId, name: friendName });
   }
 
   // Lightweight discovery record so a friend can see roughly where you are —
@@ -836,6 +857,39 @@ class FirebaseManager {
       }, { merge: true });
     } catch (err) { console.warn(err); }
   }
+}
+
+// Short, human-typeable player ID: 2 letters (from the email/name) + a
+// 4-digit number, e.g. "AN4821". A `gameIds/{id} -> {uid}` mapping doc
+// claims each id atomically; on collision we try the next number, and if
+// an entire letter pair is exhausted (10,000 ids — essentially never),
+// we roll the second letter forward and start the numbers over again, per
+// the same "increase the number or the letters" rule.
+function _gameIdLetters(email, displayName) {
+  const src = (email ? email.split('@')[0] : displayName) || 'PL';
+  const letters = src.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
+  return (letters + 'XX').slice(0, 2);
+}
+async function allocateGameId(email, displayName, uid) {
+  if (!fbDb) return null;
+  const letters = _gameIdLetters(email, displayName).split('');
+  for (let letterTry = 0; letterTry < 26; letterTry++) {
+    for (let num = 0; num < 10000; num++) {
+      const candidate = letters.join('') + String(num).padStart(4, '0');
+      const ref = doc(fbDb, 'gameIds', candidate);
+      try {
+        const claimed = await runTransaction(fbDb, async (tx) => {
+          const snap = await tx.get(ref);
+          if (snap.exists()) return false;
+          tx.set(ref, { uid });
+          return true;
+        });
+        if (claimed) return candidate;
+      } catch (err) { /* contention or rules issue — try the next number */ }
+    }
+    letters[1] = String.fromCharCode(((letters[1].charCodeAt(0) - 65 + 1) % 26) + 65);
+  }
+  throw new Error('Could not allocate a game ID.');
 }
 
 const firebaseManager = new FirebaseManager();
@@ -2729,19 +2783,21 @@ class MultiplayerManager {
     const loginErrorEl = document.getElementById('mp-login-error');
     document.getElementById('mp-google-btn').addEventListener('click', async () => {
       loginErrorEl.textContent = '';
-      try { await firebaseManager.signInGoogle(); } catch (err) { loginErrorEl.textContent = err.message; }
+      try { await firebaseManager.signInGoogle(); }
+      catch (err) { loginErrorEl.textContent = err?.message || 'Google sign-in failed. Please try again.'; }
     });
     document.getElementById('mp-guest-btn').addEventListener('click', async () => {
       loginErrorEl.textContent = '';
       const name = document.getElementById('mp-guest-name-input').value.trim();
-      try { await firebaseManager.signInGuest(name); } catch (err) { loginErrorEl.textContent = err.message; }
+      try { await firebaseManager.signInGuest(name); }
+      catch (err) { loginErrorEl.textContent = err?.message || 'Could not continue as guest. Please try again.'; }
     });
     document.getElementById('mp-add-friend-btn').addEventListener('click', async () => {
       const errEl = document.getElementById('mp-friend-error');
       const input = document.getElementById('mp-friend-uid-input');
       errEl.textContent = '';
-      try { await firebaseManager.addFriendByUid(input.value); input.value = ''; this._renderFriendsList(); }
-      catch (err) { errEl.textContent = err.message; }
+      try { await firebaseManager.addFriendByGameId(input.value); input.value = ''; this._renderFriendsList(); }
+      catch (err) { errEl.textContent = err?.message || 'Could not add that friend.'; }
     });
 
     firebaseManager.on('signedIn', (profile) => this._onFirebaseSignedIn(profile));
@@ -2760,11 +2816,12 @@ class MultiplayerManager {
 
     const summary = document.getElementById('mp-profile-summary');
     summary.style.display = 'block';
-    summary.textContent = `Signed in as ${profile.displayName} — Kills: ${profile.stats?.kills ?? 0}  Deaths: ${profile.stats?.deaths ?? 0}`;
+    const xp = profile.stats?.xp ?? 0;
+    summary.textContent = `Signed in as ${profile.displayName} — Kills: ${profile.stats?.kills ?? 0}  Deaths: ${profile.stats?.deaths ?? 0}  XP: ${xp}`;
 
     if (firebaseManager.user && !firebaseManager.user.isGuest) {
       document.getElementById('mp-friends-panel').style.display = 'block';
-      document.getElementById('mp-my-uid').textContent = firebaseManager.user.uid;
+      document.getElementById('mp-my-uid').textContent = profile.gameId || '(allocating...)';
       this._renderFriendsList();
     }
 
@@ -3085,17 +3142,20 @@ class MultiplayerManager {
   }
 
   _updateLabels(camera) {
-    const container = document.getElementById('remote-labels');
+    if (!this._labelsContainer) this._labelsContainer = document.getElementById('remote-labels');
+    const container = this._labelsContainer;
     const w = container.clientWidth, h = container.clientHeight;
     for (const rp of this.remotePlayers.values()) {
-      let el = document.getElementById('rl-' + rp.id);
-      if (!el) {
-        el = document.createElement('div');
+      if (!rp._labelEl) {
+        const el = document.createElement('div');
         el.id = 'rl-' + rp.id;
         el.className = 'remote-label';
         el.innerHTML = `<div class="rl-name">${rp.name}</div><div class="rl-hb-track"><div class="rl-hb-fill"></div></div>`;
         container.appendChild(el);
+        rp._labelEl = el;
+        rp._labelFillEl = el.querySelector('.rl-hb-fill');
       }
+      const el = rp._labelEl;
       if (!rp.alive) { el.style.display = 'none'; continue; }
       const headWorldPos = new THREE.Vector3(rp.position.x, rp.position.y + 1.95, rp.position.z);
       const ndc = headWorldPos.project(camera);
@@ -3104,7 +3164,7 @@ class MultiplayerManager {
       el.style.left = ((ndc.x * 0.5 + 0.5) * w) + 'px';
       el.style.top = ((-ndc.y * 0.5 + 0.5) * h) + 'px';
       const pct = Math.max(0, Math.min(100, (rp.health / rp.maxHealth) * 100));
-      el.querySelector('.rl-hb-fill').style.width = pct + '%';
+      rp._labelFillEl.style.width = pct + '%';
     }
   }
 }
@@ -3210,13 +3270,15 @@ class Game {
 
   _updateLocalHealthBar() {
     if (!this.multiplayerManager.active) return;
-    const wrap = document.getElementById('local-health-wrap');
-    const fill = document.getElementById('local-health-fill');
-    const label = document.getElementById('local-health-label');
+    if (!this._healthWrapEl) {
+      this._healthWrapEl = document.getElementById('local-health-wrap');
+      this._healthFillEl = document.getElementById('local-health-fill');
+      this._healthLabelEl = document.getElementById('local-health-label');
+    }
     const pct = Math.max(0, Math.min(100, (this.player.health / this.player.maxHealth) * 100));
-    fill.style.width = pct + '%';
-    label.textContent = `${Math.round(this.player.health)} / ${this.player.maxHealth}`;
-    wrap.classList.toggle('low', pct <= 30);
+    this._healthFillEl.style.width = pct + '%';
+    this._healthLabelEl.textContent = `${Math.round(this.player.health)} / ${this.player.maxHealth}`;
+    this._healthWrapEl.classList.toggle('low', pct <= 30);
   }
 
   _render() { this.gameRenderer.render(); }
