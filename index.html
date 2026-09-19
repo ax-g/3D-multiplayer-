@@ -715,7 +715,6 @@ const firebaseConfig = {
   messagingSenderId: "795428196597",
   appId: "1:795428196597:web:64e2615726a479668df5bc"
 };
-
 let fbApp = null, fbAuth = null, fbDb = null, fbReady = false;
 try {
   fbApp = initializeApp(firebaseConfig);
@@ -1092,6 +1091,11 @@ class Skybox {
   }
 }
 
+// Shared across all bots (only 3 today, but same principle as RemotePlayer
+// below — one geometry allocation instead of one per spawn).
+const _botTorsoGeometry = new THREE.CapsuleGeometry(0.3, 0.8, 4, 8);
+const _botHeadGeometry = new THREE.SphereGeometry(0.24, 12, 12);
+
 class World {
   constructor(scene) {
     this.scene = scene;
@@ -1234,13 +1238,18 @@ class World {
 
   _spawnEnemy(x, z, id) {
     const group = new THREE.Group();
+    // Geometry is shared across bots (cheap, never mutated per-instance).
+    // Material stays per-bot because hit-flash mutates `.emissive` directly
+    // — sharing it would flash every bot at once.
     const mat = new THREE.MeshStandardMaterial({ color: 0xb33636, roughness: 0.6 });
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 0.8, 4, 8), mat);
+    const torso = new THREE.Mesh(_botTorsoGeometry, mat);
     torso.position.y = 1.1;
-    torso.castShadow = true;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12), mat);
+    torso.castShadow = false; // server-driven bots: skip shadow casting, see RemotePlayer for why
+    torso.receiveShadow = false;
+    const head = new THREE.Mesh(_botHeadGeometry, mat);
     head.position.y = 1.7;
-    head.castShadow = true;
+    head.castShadow = false;
+    head.receiveShadow = false;
     group.add(torso, head);
     group.position.set(x, 0, z);
     this.scene.add(group);
@@ -2524,6 +2533,7 @@ class UIManager {
 
 class NetworkManager {
   static SEND_HZ = 15;
+  static MAX_PRECONNECT_RETRIES = 4; // give up (not loop forever) if we never even reach a first 'welcome'
 
   constructor() {
     this.ws = null;
@@ -2536,6 +2546,7 @@ class NetworkManager {
     this._reconnectAttempts = 0;
     this._reconnectTimer = null;
     this._pingInterval = null;
+    this._receivedWelcome = false; // true once we've joined a room at least once this session
   }
 
   on(type, fn) {
@@ -2549,23 +2560,47 @@ class NetworkManager {
     for (const fn of arr.slice()) fn(payload);
   }
 
+  // Always tears down any existing socket/timers first — guarantees only
+  // one live WebSocket per NetworkManager even if connect() is called
+  // again while a previous attempt/reconnect-loop is still in flight
+  // (double-clicking Create/Join, retrying after a typo'd address, etc.)
   connect(url, name, room) {
+    this._teardown();
     this.url = url;
     this.name = name;
     this.room = room || '';
     this._shouldReconnect = true;
     this._reconnectAttempts = 0;
+    this._receivedWelcome = false;
     this._open();
   }
 
+  _teardown() {
+    this._shouldReconnect = false; // so the old socket's 'close' handler won't schedule its own reconnect
+    clearTimeout(this._reconnectTimer);
+    clearInterval(this._pingInterval);
+    if (this.ws) {
+      // Listeners were added with addEventListener, so there's no single
+      // handler property to null out here — instead every listener below
+      // checks `this.ws !== socket` and no-ops once superseded, which is
+      // what actually makes an old, closing socket inert.
+      try { this.ws.close(); } catch { /* already closed */ }
+    }
+    this.ws = null;
+    this.connected = false;
+  }
+
   _open() {
+    let socket;
     try {
-      this.ws = new WebSocket(this.url);
+      socket = new WebSocket(this.url);
     } catch (err) {
       this._emit('fatal', { message: 'Invalid server address.' });
       return;
     }
-    this.ws.addEventListener('open', () => {
+    this.ws = socket;
+    socket.addEventListener('open', () => {
+      if (this.ws !== socket) return; // superseded by a newer connect()/teardown
       this.connected = true;
       this._reconnectAttempts = 0;
       this._send({ t: 'hello', name: this.name, room: this.room });
@@ -2573,24 +2608,32 @@ class NetworkManager {
       this._pingInterval = setInterval(() => this._send({ t: 'ping', time: Date.now() }), 5000);
       this._emit('open', {});
     });
-    this.ws.addEventListener('message', (ev) => {
+    socket.addEventListener('message', (ev) => {
+      if (this.ws !== socket) return;
       let msg;
       try { msg = JSON.parse(ev.data); } catch { return; }
-      // Remember the assigned room code so a dropped connection can
-      // auto-rejoin the same room instead of creating a new one.
-      if (msg.t === 'welcome') this.room = msg.room;
+      if (msg.t === 'welcome') {
+        this.room = msg.room; // remember it so a dropped connection re-joins the same room
+        this._receivedWelcome = true;
+      }
       this._emit(msg.t, msg);
     });
-    this.ws.addEventListener('close', () => {
+    socket.addEventListener('close', () => {
+      if (this.ws !== socket) return; // an old socket closing after we've already moved on — ignore
       this.connected = false;
       clearInterval(this._pingInterval);
       this._emit('close', {});
       if (this._shouldReconnect) this._scheduleReconnect();
     });
-    this.ws.addEventListener('error', () => { /* 'close' also fires; handled there */ });
+    socket.addEventListener('error', () => { /* 'close' also fires; handled there */ });
   }
 
   _scheduleReconnect() {
+    if (!this._receivedWelcome && this._reconnectAttempts >= NetworkManager.MAX_PRECONNECT_RETRIES) {
+      this._shouldReconnect = false;
+      this._emit('fatal', { message: 'Could not reach the server. Check the address and that it is running, then try again.' });
+      return;
+    }
     clearTimeout(this._reconnectTimer);
     const delay = Math.min(1000 * Math.pow(1.6, this._reconnectAttempts), 8000);
     this._reconnectAttempts++;
@@ -2607,12 +2650,7 @@ class NetworkManager {
   sendPickup(pickupId) { this._send({ t: 'pickup', pickupId }); }
   sendDrop(payload) { this._send({ t: 'drop', ...payload }); }
 
-  disconnect() {
-    this._shouldReconnect = false;
-    clearTimeout(this._reconnectTimer);
-    clearInterval(this._pingInterval);
-    if (this.ws) this.ws.close();
-  }
+  disconnect() { this._teardown(); }
 }
 
 // A lightweight stand-in for another player's Player instance: visual mesh
@@ -2620,6 +2658,19 @@ class NetworkManager {
 // transform that we interpolate toward every frame, since network updates
 // only arrive ~15 times/sec but we render at up to 60+.
 const REMOTE_COLORS = [0xff6b6b, 0x66d1ff, 0xffd166, 0x8aff8a, 0xd18aff, 0xff9f4a, 0x4ad1c0, 0xffffff];
+
+// Shared across every RemotePlayer/bot instance (up to 8 remote players +
+// 3 bots) instead of allocating a fresh geometry/material per instance —
+// same visuals, far fewer GPU buffers/shader programs to manage on mobile.
+const _remoteTorsoGeometry = new THREE.CapsuleGeometry(0.28, 0.75, 4, 8);
+const _remoteHeadGeometry = new THREE.SphereGeometry(0.22, 16, 16);
+const _remoteMaterialCache = new Map(); // color -> MeshStandardMaterial
+function _remoteMaterial(color) {
+  if (!_remoteMaterialCache.has(color)) {
+    _remoteMaterialCache.set(color, new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15 }));
+  }
+  return _remoteMaterialCache.get(color);
+}
 
 class RemotePlayer {
   constructor(scene, { id, name, x, y, z, yaw, health, maxHealth }, colorIndex) {
@@ -2637,14 +2688,20 @@ class RemotePlayer {
     this._lastUpdateTime = performance.now();
 
     const color = REMOTE_COLORS[colorIndex % REMOTE_COLORS.length];
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.15 });
+    const mat = _remoteMaterial(color);
     this.mesh = new THREE.Group();
-    const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.75, 4, 8), mat);
+    const torso = new THREE.Mesh(_remoteTorsoGeometry, mat);
     torso.position.y = 1.05;
-    torso.castShadow = true;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), mat);
+    // Remote players/bots skip shadow casting — with up to 7 remote
+    // players + 3 bots on screen, dynamic shadow casters are one of the
+    // most expensive things a mobile GPU can be asked to do per frame.
+    // The local player still casts a shadow, so this is barely noticeable.
+    torso.castShadow = false;
+    torso.receiveShadow = false;
+    const head = new THREE.Mesh(_remoteHeadGeometry, mat);
     head.position.y = 1.62;
-    head.castShadow = true;
+    head.castShadow = false;
+    head.receiveShadow = false;
     this.mesh.add(torso, head);
     this.mesh.position.copy(this.position);
     scene.add(this.mesh);
@@ -2846,7 +2903,16 @@ class MultiplayerManager {
     if (!server) { this.errorEl.textContent = 'Enter a server address (e.g. wss://your-server.example.com).'; return; }
     try { localStorage.setItem('mp-lobby-prefs', JSON.stringify({ server, name })); } catch { /* ignore */ }
     this._setStatus('connecting', 'Connecting...');
+    // Prevent double-clicks (or clicking Create then Join before the first
+    // attempt resolves) from firing connect() twice — NetworkManager.connect()
+    // is self-cleaning either way, but this also gives clearer button feedback.
+    this._setConnectButtonsEnabled(false);
     this.net.connect(server, name, roomCode);
+  }
+
+  _setConnectButtonsEnabled(enabled) {
+    document.getElementById('mp-create-btn').disabled = !enabled;
+    document.getElementById('mp-join-btn').disabled = !enabled;
   }
 
   _setStatus(cls, text) {
@@ -2861,10 +2927,15 @@ class MultiplayerManager {
     n.on('open', () => {});
     n.on('close', () => { if (this.active) this._setStatus('disconnected', 'Disconnected — reconnecting...'); });
     n.on('reconnecting', ({ attempt }) => this._setStatus('disconnected', `Reconnecting (attempt ${attempt})...`));
-    n.on('fatal', ({ message }) => { this.errorEl.textContent = message; this._setStatus('disconnected', 'Offline'); });
+    n.on('fatal', ({ message }) => {
+      this.errorEl.textContent = message;
+      this._setStatus('disconnected', 'Offline');
+      this._setConnectButtonsEnabled(true);
+    });
     n.on('room-error', ({ message }) => {
       this.errorEl.textContent = message;
       this._setStatus('disconnected', 'Offline');
+      this._setConnectButtonsEnabled(true);
       this.net.disconnect();
     });
 
@@ -3142,27 +3213,38 @@ class MultiplayerManager {
   }
 
   _updateLabels(camera) {
-    if (!this._labelsContainer) this._labelsContainer = document.getElementById('remote-labels');
-    const container = this._labelsContainer;
-    const w = container.clientWidth, h = container.clientHeight;
+    if (!this._labelsContainer) {
+      this._labelsContainer = document.getElementById('remote-labels');
+      this._labelsW = window.innerWidth;
+      this._labelsH = window.innerHeight;
+      this._labelScratch = new THREE.Vector3();
+      // window.innerWidth/Height are already known without forcing a
+      // layout read the way element.clientWidth/Height do — cache them and
+      // only refresh on resize instead of every single render frame.
+      window.addEventListener('resize', () => {
+        this._labelsW = window.innerWidth;
+        this._labelsH = window.innerHeight;
+      });
+    }
+    const w = this._labelsW, h = this._labelsH;
+    const scratch = this._labelScratch;
     for (const rp of this.remotePlayers.values()) {
       if (!rp._labelEl) {
         const el = document.createElement('div');
         el.id = 'rl-' + rp.id;
         el.className = 'remote-label';
         el.innerHTML = `<div class="rl-name">${rp.name}</div><div class="rl-hb-track"><div class="rl-hb-fill"></div></div>`;
-        container.appendChild(el);
+        this._labelsContainer.appendChild(el);
         rp._labelEl = el;
         rp._labelFillEl = el.querySelector('.rl-hb-fill');
       }
       const el = rp._labelEl;
       if (!rp.alive) { el.style.display = 'none'; continue; }
-      const headWorldPos = new THREE.Vector3(rp.position.x, rp.position.y + 1.95, rp.position.z);
-      const ndc = headWorldPos.project(camera);
-      if (ndc.z > 1 || ndc.z < -1) { el.style.display = 'none'; continue; }
+      scratch.set(rp.position.x, rp.position.y + 1.95, rp.position.z).project(camera);
+      if (scratch.z > 1 || scratch.z < -1) { el.style.display = 'none'; continue; }
       el.style.display = 'block';
-      el.style.left = ((ndc.x * 0.5 + 0.5) * w) + 'px';
-      el.style.top = ((-ndc.y * 0.5 + 0.5) * h) + 'px';
+      el.style.left = ((scratch.x * 0.5 + 0.5) * w) + 'px';
+      el.style.top = ((-scratch.y * 0.5 + 0.5) * h) + 'px';
       const pct = Math.max(0, Math.min(100, (rp.health / rp.maxHealth) * 100));
       rp._labelFillEl.style.width = pct + '%';
     }
