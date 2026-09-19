@@ -864,6 +864,13 @@ class FirebaseManager {
 // an entire letter pair is exhausted (10,000 ids — essentially never),
 // we roll the second letter forward and start the numbers over again, per
 // the same "increase the number or the letters" rule.
+//
+// Hard-capped at a small number of attempts and gives up fast on repeated
+// failures (e.g. Firestore rules not deployed yet) — this used to be able
+// to spin through up to 260,000 network round-trips in a tight loop with
+// no backoff, which was almost certainly the real cause of a phone
+// freezing to ~1 FPS: not "acting as a server", just this loop hammering
+// the network and flooding the JS microtask queue as fast as it could.
 function _gameIdLetters(email, displayName) {
   const src = (email ? email.split('@')[0] : displayName) || 'PL';
   const letters = src.replace(/[^a-zA-Z]/g, '').toUpperCase().slice(0, 2);
@@ -871,24 +878,40 @@ function _gameIdLetters(email, displayName) {
 }
 async function allocateGameId(email, displayName, uid) {
   if (!fbDb) return null;
+  const MAX_ATTEMPTS = 20;
+  const MAX_CONSECUTIVE_ERRORS = 3;
   const letters = _gameIdLetters(email, displayName).split('');
-  for (let letterTry = 0; letterTry < 26; letterTry++) {
-    for (let num = 0; num < 10000; num++) {
-      const candidate = letters.join('') + String(num).padStart(4, '0');
-      const ref = doc(fbDb, 'gameIds', candidate);
-      try {
-        const claimed = await runTransaction(fbDb, async (tx) => {
-          const snap = await tx.get(ref);
-          if (snap.exists()) return false;
-          tx.set(ref, { uid });
-          return true;
-        });
-        if (claimed) return candidate;
-      } catch (err) { /* contention or rules issue — try the next number */ }
+  let num = Math.floor(Math.random() * 10000); // random start, not always 0 — fewer collisions, no long sequential scan
+  let consecutiveErrors = 0;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const candidate = letters.join('') + String(num).padStart(4, '0');
+    const ref = doc(fbDb, 'gameIds', candidate);
+    try {
+      const claimed = await runTransaction(fbDb, async (tx) => {
+        const snap = await tx.get(ref);
+        if (snap.exists()) return false;
+        tx.set(ref, { uid });
+        return true;
+      });
+      consecutiveErrors = 0;
+      if (claimed) return candidate;
+    } catch (err) {
+      consecutiveErrors++;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        // Firestore is almost certainly unreachable/misconfigured (rules
+        // not deployed, project not set up, offline, etc.) — stop
+        // hammering it. The player still gets a working profile, just
+        // without a short game ID until this is resolved.
+        console.warn('Game ID allocation failing repeatedly, giving up:', err);
+        return null;
+      }
     }
-    letters[1] = String.fromCharCode(((letters[1].charCodeAt(0) - 65 + 1) % 26) + 65);
+    num = (num + 1) % 10000;
+    if (num === 0) letters[1] = String.fromCharCode(((letters[1].charCodeAt(0) - 65 + 1) % 26) + 65);
   }
-  throw new Error('Could not allocate a game ID.');
+  console.warn('Could not allocate a game ID after', MAX_ATTEMPTS, 'attempts — giving up for now.');
+  return null;
 }
 
 const firebaseManager = new FirebaseManager();
