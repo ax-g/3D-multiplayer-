@@ -690,7 +690,7 @@ html, body {
 import * as THREE from 'three';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-app.js';
 import {
-  getAuth, GoogleAuthProvider, signInWithPopup,
+  getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult,
   onAuthStateChanged,
 } from 'https://www.gstatic.com/firebasejs/10.13.2/firebase-auth.js';
 import {
@@ -733,6 +733,19 @@ class FirebaseManager {
     this._saveTimer = null;
     if (fbReady) {
       onAuthStateChanged(fbAuth, (user) => this._onAuthChanged(user));
+      // Popup-based sign-in (signInWithPopup) is unreliable on mobile
+      // browsers — the popup can leave the ORIGINAL tab in a backgrounded/
+      // suspended state even after "returning" from it, and browsers
+      // throttle a backgrounded tab's render loop to ~1fps as a deliberate
+      // battery-saving policy. That matches a persistent low-FPS symptom
+      // on exactly one device with nothing to do with rooms/servers at
+      // all. Using a full-page redirect instead avoids that class of bug
+      // entirely — this call just surfaces any error from a redirect that
+      // just completed; onAuthStateChanged above handles the actual
+      // sign-in once the browser lands back here.
+      getRedirectResult(fbAuth).catch((err) => {
+        this._emit('error', { message: 'Google sign-in failed: ' + err.message });
+      });
     }
   }
 
@@ -755,7 +768,10 @@ class FirebaseManager {
 
   async signInGoogle() {
     if (!fbReady) throw new Error('Firebase is not configured yet — add your project keys, or continue as a guest.');
-    await signInWithPopup(fbAuth, new GoogleAuthProvider());
+    // This navigates the page away to Google's sign-in flow and back — it
+    // does not resolve in-place. The redirect result is picked up by
+    // getRedirectResult() in the constructor above once the page reloads.
+    await signInWithRedirect(fbAuth, new GoogleAuthProvider());
   }
 
   // Guests never touch Firebase at all — no anonymous-auth dependency, no
@@ -1369,8 +1385,7 @@ class World {
       enemy.mesh.position.x = THREE.MathUtils.damp(enemy.mesh.position.x, enemy.targetPos.x, lerpRate, delta);
       enemy.mesh.position.z = THREE.MathUtils.damp(enemy.mesh.position.z, enemy.targetPos.z, lerpRate, delta);
       let diff = enemy.targetYaw - enemy.yaw;
-      while (diff > Math.PI) diff -= Math.PI * 2;
-      while (diff < -Math.PI) diff += Math.PI * 2;
+      diff = wrapAngleDiff(diff);
       enemy.yaw += diff * (1 - Math.exp(-lerpRate * delta));
       enemy.mesh.rotation.y = enemy.yaw;
     }
@@ -1646,8 +1661,7 @@ class Player {
 
   _dampAngle(current, target, rate, delta) {
     let diff = target - current;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    diff = wrapAngleDiff(diff);
     return current + diff * (1 - Math.exp(-rate * delta));
   }
 
@@ -1982,9 +1996,10 @@ class Controls {
 }
 
 class Engine {
-  constructor({ onUpdate, onRender }) {
+  constructor({ onUpdate, onRender, onError }) {
     this.onUpdate = onUpdate;
     this.onRender = onRender;
+    this.onError = onError;
     this.running = false;
     this._lastTime = performance.now();
     this._fpsFrames = 0;
@@ -2001,16 +2016,41 @@ class Engine {
     let delta = (now - this._lastTime) / 1000;
     this._lastTime = now;
     delta = Math.min(delta, 1 / 20);
-    this.onUpdate(delta);
-    this.onRender();
-    this._fpsFrames++;
-    if (now - this._fpsLast >= 500) {
-      this.fps = Math.round((this._fpsFrames * 1000) / (now - this._fpsLast));
-      this._fpsFrames = 0;
-      this._fpsLast = now;
+    // CRITICAL: requestAnimationFrame for the next frame is scheduled in
+    // the finally block below, not just at the end of the try. Previously
+    // it sat after onUpdate/onRender with no try/catch at all — if either
+    // ever threw, for any reason, the next frame was simply never
+    // requested and the game froze solid, permanently, at whatever FPS
+    // was last measured. That's a silent, unrecoverable hard-freeze bug
+    // independent of what actually throws. Now a bad frame gets logged
+    // and skipped, and rendering keeps going.
+    try {
+      this.onUpdate(delta);
+      this.onRender();
+      this._fpsFrames++;
+      if (now - this._fpsLast >= 500) {
+        this.fps = Math.round((this._fpsFrames * 1000) / (now - this._fpsLast));
+        this._fpsFrames = 0;
+        this._fpsLast = now;
+      }
+    } catch (err) {
+      console.error('Frame error (recovered — loop continues):', err);
+      if (this.onError) this.onError(err);
+    } finally {
+      requestAnimationFrame((t) => this._loop(t));
     }
-    requestAnimationFrame((t) => this._loop(t));
   }
+}
+
+// Wraps an angle difference into [-π, π) in constant time regardless of
+// how large the input is. Used instead of the classic "while (diff > PI)
+// diff -= 2*PI" pattern, which is O(n) in the input's magnitude — safe
+// for normal small diffs, but a single malformed/huge angle value (e.g.
+// from a network bug) turns that into a tens-of-millions-of-iterations
+// loop that freezes the tab solid. This can't degrade no matter what
+// number comes in.
+function wrapAngleDiff(diff) {
+  return diff - Math.PI * 2 * Math.floor((diff + Math.PI) / (Math.PI * 2));
 }
 
 class EventBus {
@@ -2029,7 +2069,10 @@ class EventBus {
   emit(event, payload) {
     const arr = this._listeners.get(event);
     if (!arr) return;
-    for (const fn of arr.slice()) fn(payload);
+    for (const fn of arr.slice()) {
+      try { fn(payload); }
+      catch (err) { console.error(`Error in '${event}' handler (recovered):`, err); }
+    }
   }
 }
 
@@ -2580,7 +2623,10 @@ class NetworkManager {
   _emit(type, payload) {
     const arr = this._listeners.get(type);
     if (!arr) return;
-    for (const fn of arr.slice()) fn(payload);
+    for (const fn of arr.slice()) {
+      try { fn(payload); }
+      catch (err) { console.error(`Error handling '${type}' message (recovered):`, err); }
+    }
   }
 
   // Always tears down any existing socket/timers first — guarantees only
@@ -2790,8 +2836,7 @@ class RemotePlayer {
     this.position.y = THREE.MathUtils.damp(this.position.y, this._targetPos.y, lerpRate, delta);
     this.position.z = THREE.MathUtils.damp(this.position.z, this._targetPos.z, lerpRate, delta);
     let diff = this._targetYaw - this.yaw;
-    while (diff > Math.PI) diff -= Math.PI * 2;
-    while (diff < -Math.PI) diff += Math.PI * 2;
+    diff = wrapAngleDiff(diff);
     this.yaw += diff * (1 - Math.exp(-lerpRate * delta));
     this.mesh.position.copy(this.position);
     this.mesh.rotation.y = this.yaw;
@@ -2863,6 +2908,13 @@ class MultiplayerManager {
     const loginErrorEl = document.getElementById('mp-login-error');
     document.getElementById('mp-google-btn').addEventListener('click', async () => {
       loginErrorEl.textContent = '';
+      // Redirect-based sign-in fully reloads the page, so anything typed
+      // into the server-address field before clicking would otherwise be
+      // lost — persist it now, same as _attemptConnect() does later.
+      try {
+        const server = this.serverInput.value.trim();
+        if (server) localStorage.setItem('mp-lobby-prefs', JSON.stringify({ server, name: this.nameInput.value.trim() }));
+      } catch { /* ignore */ }
       try { await firebaseManager.signInGoogle(); }
       catch (err) { loginErrorEl.textContent = err?.message || 'Google sign-in failed. Please try again.'; }
     });
@@ -3328,10 +3380,23 @@ class Game {
     this.engine = new Engine({
       onUpdate: (delta) => this._update(delta),
       onRender: () => this._render(),
+      onError: (err) => this._showFrameError(err),
     });
 
     this._hideLoadingScreen();
     this.engine.start();
+  }
+
+  _showFrameError(err) {
+    let el = document.getElementById('engine-error-banner');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'engine-error-banner';
+      el.style.cssText = 'position:absolute;top:0;left:0;right:0;z-index:200;background:rgba(180,0,0,0.92);color:#fff;font-family:monospace;font-size:11px;padding:6px 10px;pointer-events:none;white-space:pre-wrap;word-break:break-word;max-height:35vh;overflow-y:auto;';
+      document.getElementById('app').appendChild(el);
+    }
+    const time = new Date().toLocaleTimeString();
+    el.textContent = `[${time}] Frame error (recovered): ${err?.message || err}\n${err?.stack || ''}`;
   }
 
   _update(delta) {
@@ -3370,7 +3435,13 @@ class Game {
     this.multiplayerManager.tick(delta, this.gameRenderer.camera);
     this._updateLocalHealthBar();
 
-    this.fpsCounter.textContent = `FPS: ${this.engine.fps}`;
+    // Appends a "(hidden)" flag when the tab itself is backgrounded — the
+    // browser throttles rendering to ~1fps in that state as a deliberate
+    // battery-saving policy, which looks identical to a real performance
+    // bug from just the FPS number alone. This makes that distinction
+    // visible on-screen without needing devtools attached.
+    const hiddenFlag = document.visibilityState === 'hidden' ? ' (tab hidden)' : '';
+    this.fpsCounter.textContent = `FPS: ${this.engine.fps}${hiddenFlag}`;
   }
 
   _updateLocalHealthBar() {
