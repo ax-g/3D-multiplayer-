@@ -113,13 +113,25 @@ class Room {
 
   // Simple deterministic circular patrol — enough to make "sync bot
   // position" meaningful without needing real pathfinding/navmesh work.
+  //
+  // IMPORTANT: `now` is Date.now() — an absolute Unix-epoch millisecond
+  // count (currently ~1.7 trillion). Multiplying that by BOT_ANGULAR_SPEED
+  // produces an angle in the hundreds of millions of radians. Math.cos/sin
+  // handle that fine, but broadcasting that raw angle as `yaw` doesn't:
+  // the client normalizes angle *differences* with a loop that steps by
+  // 2π at a time, and a diff that large takes 100+ million iterations —
+  // pegging the CPU solid on whichever client's bot yaw was still near 0
+  // (freshly spawned) when the first big value arrived, i.e. the room
+  // creator. Wrapping the angle into [0, 2π) here keeps every `yaw` this
+  // server ever sends small, so that loop is always trivially short.
   tickBots(now) {
+    const TWO_PI = Math.PI * 2;
     for (const bot of this.bots.values()) {
       if (!bot.alive) continue;
-      const angle = (now / 1000) * BOT_ANGULAR_SPEED + bot.phase;
+      const angle = ((now / 1000) * BOT_ANGULAR_SPEED + bot.phase) % TWO_PI;
       bot.x = bot.centerX + Math.cos(angle) * BOT_PATROL_RADIUS;
       bot.z = bot.centerZ + Math.sin(angle) * BOT_PATROL_RADIUS;
-      bot.yaw = angle + Math.PI / 2;
+      bot.yaw = (angle + Math.PI / 2) % TWO_PI;
     }
   }
 }
