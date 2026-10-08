@@ -73,6 +73,8 @@ class Room {
     this.code = code;
     this.players = new Map(); // id -> PlayerState
     this.collected = new Set(); // pickup ids already granted to someone
+    this.hostId = null; // the room creator, or whoever's been promoted after they left
+    this.phase = 'lobby'; // 'lobby' (ready-up screen) -> 'active' (real gameplay)
     this.bots = new Map(); // id -> BotState — server-authoritative
     for (const spawn of BOT_SPAWNS) {
       this.bots.set(spawn.id, {
@@ -109,6 +111,20 @@ class Room {
 
   publicBotState(b) {
     return { id: b.id, x: b.x, y: b.y, z: b.z, yaw: b.yaw, health: b.health, maxHealth: b.maxHealth, alive: b.alive };
+  }
+
+  // Roster entry for the pre-match Game Lobby UI — distinct from
+  // publicState(), which is the (larger, higher-frequency) shape used for
+  // actual gameplay sync once the match has started.
+  publicLobbyPlayer(p) {
+    return { id: p.id, name: p.name, ready: !!p.ready, host: p.id === this.hostId };
+  }
+
+  broadcastLobbyState() {
+    this.broadcast({
+      t: 'lobby-state', hostId: this.hostId, phase: this.phase,
+      players: [...this.players.values()].map((p) => this.publicLobbyPlayer(p)),
+    });
   }
 
   // Simple deterministic circular patrol — enough to make "sync bot
@@ -177,6 +193,9 @@ function handleMessage(ws, conn, msg) {
 
   switch (msg.t) {
     case 'hello': return onHello(ws, conn, msg);
+    case 'ready': return onReady(conn, msg);
+    case 'start-match': return onStartMatch(conn);
+    case 'kick': return onKick(conn, msg);
     case 'state': return onState(conn, msg);
     case 'attack': return onAttack(conn, msg);
     case 'pickup': return onPickup(conn, msg);
@@ -188,7 +207,15 @@ function handleMessage(ws, conn, msg) {
 function onHello(ws, conn, msg) {
   if (conn.id) return; // already joined
 
-  let room;
+  // NOTE: joining a room whose match already started is allowed on purpose
+  // — the server has no session identity across a reconnect (every hello
+  // gets a fresh id), so there is no way to tell "player reconnecting
+  // mid-match" apart from "new player joining mid-match" here. Blocking
+  // active-phase joins would break reconnection during gameplay, which
+  // matters more than preventing a late joiner — the client just skips
+  // straight past the lobby/ready screen for an already-active room
+  // (see _onWelcome's `msg.phase === 'active'` branch).
+  let room, isNewRoom = false;
   const requested = (msg.room || '').toUpperCase().trim();
   if (requested) {
     room = rooms.get(requested);
@@ -197,6 +224,7 @@ function onHello(ws, conn, msg) {
   } else {
     room = new Room(makeRoomCode());
     rooms.set(room.code, room);
+    isNewRoom = true;
   }
 
   const id = nextId();
@@ -205,29 +233,65 @@ function onHello(ws, conn, msg) {
     id, ws, room, name: String(msg.name || 'Player').slice(0, 16).trim() || 'Player',
     x: sx, y: sy, z: sz, yaw: 0,
     health: 100, maxHealth: 100, alive: true, weaponId: null,
-    crouching: false, dashing: false, grounded: true,
+    crouching: false, dashing: false, grounded: true, ready: false,
     lastAttack: new Map(), // weaponKey -> timestamp
     lastStateTime: Date.now(),
   };
   room.players.set(id, player);
   conn.id = id;
   conn.room = room;
+  if (isNewRoom) room.hostId = id; // room creator is host by default
 
   ws.send(JSON.stringify({
     t: 'welcome',
     id,
     room: room.code,
+    phase: room.phase,
     players: [...room.players.values()].filter((p) => p.id !== id).map(room.publicState.bind(room)),
     bots: [...room.bots.values()].map(room.publicBotState.bind(room)),
     collected: [...room.collected],
   }));
 
   room.broadcast({ t: 'player-joined', player: room.publicState(player) }, id);
+  room.broadcastLobbyState();
+}
+
+// Host-only. Ignored once the match has already started (no re-starting
+// mid-game) and for anyone who isn't the current host — including a stale
+// click from someone who was just demoted after the real host reconnected
+// under a new connection id.
+function onStartMatch(conn) {
+  const player = getPlayer(conn);
+  const room = conn.room;
+  if (!player || !room || player.id !== room.hostId || room.phase !== 'lobby') return;
+  room.phase = 'active';
+  room.broadcast({ t: 'match-started' });
+}
+
+function onReady(conn, msg) {
+  const player = getPlayer(conn);
+  if (!player || !conn.room) return;
+  player.ready = !!msg.ready;
+  conn.room.broadcastLobbyState();
+}
+
+// Host-only — removes another player from the room/lobby entirely.
+function onKick(conn, msg) {
+  const player = getPlayer(conn);
+  const room = conn.room;
+  if (!player || !room || player.id !== room.hostId) return;
+  const target = room.players.get(msg.targetId);
+  if (!target || target.id === player.id) return;
+  room.send(target.id, { t: 'kicked', message: 'Removed by the host.' });
+  room.players.delete(target.id);
+  try { target.ws.close(); } catch { /* already closing */ }
+  room.broadcast({ t: 'player-left', id: target.id });
+  room.broadcastLobbyState();
 }
 
 function onState(conn, msg) {
   const player = getPlayer(conn);
-  if (!player || !player.alive) return;
+  if (!player || !player.alive || !conn.room || conn.room.phase !== 'active') return;
 
   // Light anti-teleport check: clamp how far a single update can move the
   // player based on elapsed time and the fastest legitimate speed (dash).
@@ -261,7 +325,7 @@ function weaponTable(weaponId) {
 
 function onAttack(conn, msg) {
   const attacker = getPlayer(conn);
-  if (!attacker || !attacker.alive) return;
+  if (!attacker || !attacker.alive || !conn.room || conn.room.phase !== 'active') return;
   const room = conn.room;
   const isBotTarget = room.bots.has(msg.targetId);
   const target = isBotTarget ? room.bots.get(msg.targetId) : room.players.get(msg.targetId);
@@ -314,7 +378,7 @@ function onAttack(conn, msg) {
 
 function onPickup(conn, msg) {
   const player = getPlayer(conn);
-  if (!player) return;
+  if (!player || !conn.room || conn.room.phase !== 'active') return;
   const room = conn.room;
   const pickupId = msg.pickupId;
   if (!pickupId || room.collected.has(pickupId)) {
@@ -326,7 +390,7 @@ function onPickup(conn, msg) {
 
 function onDrop(conn, msg) {
   const player = getPlayer(conn);
-  if (!player) return;
+  if (!player || !conn.room || conn.room.phase !== 'active') return;
   const room = conn.room;
   // The dropper already spawned this locally; broadcast it to everyone else.
   room.broadcast({
@@ -343,9 +407,16 @@ function getPlayer(conn) {
 function onDisconnect(conn) {
   if (!conn.id || !conn.room) return;
   const room = conn.room;
+  if (!room.players.has(conn.id)) return; // already removed (e.g. onKick closed this socket itself)
   room.players.delete(conn.id);
   room.broadcast({ t: 'player-left', id: conn.id });
-  if (room.players.size === 0) rooms.delete(room.code);
+  if (room.players.size === 0) { rooms.delete(room.code); return; }
+  if (room.hostId === conn.id) {
+    // Host left — promote whoever's been in the room longest (Map
+    // preserves insertion order, so the first remaining entry).
+    room.hostId = room.players.keys().next().value;
+  }
+  room.broadcastLobbyState();
 }
 
 // Periodic state broadcast, independent of how often clients send updates.
