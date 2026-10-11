@@ -17,6 +17,9 @@
 const { WebSocketServer } = require('ws');
 const http = require('http');
 
+// Bump when the protocol changes. Shown at the server's web address and sent to
+// clients, so you can tell at a glance whether Render is running the new code.
+const SERVER_VERSION = 'v4-hub';
 const PORT = process.env.PORT || 8080;
 const MAX_PLAYERS = 8;
 const TICK_HZ = 15;
@@ -157,7 +160,7 @@ function nextId() { return 'p' + (idCounter++) + '_' + Math.random().toString(36
 
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Multiplayer game server OK. Rooms active: ' + rooms.size);
+  res.end(`Multiplayer game server OK (${SERVER_VERSION}). Rooms: ${rooms.size}, players online: ${hubs.size}`);
 });
 
 const wss = new WebSocketServer({ server });
@@ -170,7 +173,8 @@ wss.on('connection', (ws) => {
     conn.lastSeen = Date.now();
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
-    handleMessage(ws, conn, msg);
+    try { handleMessage(ws, conn, msg); }
+    catch (err) { console.error('Error handling message', msg && msg.t, err); }
   });
 
   ws.on('close', () => { removeFromRoom(conn); unregisterHub(conn); });
@@ -233,7 +237,7 @@ function onHubHello(ws, conn, msg) {
   };
   conn.hub = hub;
   hubs.set(hub.id, hub);
-  ws.send(JSON.stringify({ t: 'hub-welcome', hubId: hub.id }));
+  ws.send(JSON.stringify({ t: 'hub-welcome', hubId: hub.id, version: SERVER_VERSION }));
   scheduleOnlineBroadcast();
 }
 
@@ -349,7 +353,9 @@ function onHello(ws, conn, msg) {
 function onStartMatch(conn) {
   const player = getPlayer(conn);
   const room = conn.room;
-  if (!player || !room || player.id !== room.hostId || room.phase !== 'lobby') return;
+  if (!player || !room) return;
+  if (player.id !== room.hostId) return room.send(player.id, { t: 'notice', message: 'Only the host can start the match.' });
+  if (room.phase !== 'lobby') return room.send(player.id, { t: 'notice', message: 'The match already started.' });
   room.phase = 'active';
   room.broadcast({ t: 'match-started' });
   scheduleOnlineBroadcast();
@@ -520,5 +526,8 @@ setInterval(() => {
     room.broadcast({ t: 'state-batch', players, bots });
   }
 }, 1000 / TICK_HZ);
+
+process.on('uncaughtException', (err) => console.error('Uncaught exception (server kept alive):', err));
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection (server kept alive):', err));
 
 server.listen(PORT, () => console.log(`Multiplayer server listening on :${PORT}`));
