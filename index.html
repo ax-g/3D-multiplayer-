@@ -517,6 +517,16 @@ html, body {
   font-family: 'Segoe UI', Arial, sans-serif; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: 90vw; text-align: center;
 }
 #mm-toast.show { opacity: 1; }
+#mm-hud-menu-btn {
+  position: absolute; top: 44px; left: 12px; z-index: 33; pointer-events: auto; cursor: pointer;
+  background: rgba(20,20,20,0.55); color: #fff; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px;
+  padding: 6px 10px; font-size: 12px; font-weight: 700; font-family: 'Segoe UI', Arial, sans-serif;
+}
+#mm-leave-confirm {
+  position: absolute; inset: 0; z-index: 110; background: rgba(0,0,0,0.65); color: #fff;
+  align-items: center; justify-content: center; font-family: 'Segoe UI', Arial, sans-serif;
+}
+#mm-leave-confirm .mm-row2 { justify-content: center; }
 @media (max-width: 720px) {
   .mm-body { flex-direction: column; overflow-y: auto; }
   .mm-left { flex: 0 0 auto; }
@@ -752,6 +762,7 @@ html, body {
           <h3>Game server</h3>
           <div class="mm-hint">Paste your server address from Render, e.g. <b>https://my-game.onrender.com</b></div>
           <input id="mm-server-input" type="text" placeholder="https://your-game.onrender.com" autocomplete="off" autocapitalize="off" />
+          <div id="mm-server-ver" class="mm-hint"></div>
           <button id="mm-server-save" class="mm-btn">SAVE &amp; CONNECT</button>
           <button id="mm-settings-close" class="mm-link">Close</button>
         </div>
@@ -785,6 +796,17 @@ html, body {
       </div>
     </div>
     <div id="mm-toast"></div>
+    <button id="mm-hud-menu-btn" style="display:none;" aria-label="Menu">&#9776; MENU</button>
+    <div id="mm-leave-confirm" style="display:none;">
+      <div class="mm-card">
+        <h3>Leave the match?</h3>
+        <div class="mm-hint">You'll go back to the main menu. Your friends stay in the match.</div>
+        <div class="mm-row2">
+          <button id="mm-leave-yes" class="mm-btn mm-btn-sm mm-btn-warn">LEAVE</button>
+          <button id="mm-leave-no" class="mm-btn mm-btn-sm mm-btn-ghost">KEEP PLAYING</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="importmap">
@@ -1533,12 +1555,23 @@ class World {
   _buildDemoPickups() {
     // Fixed ids (not random) so every client/server agrees on the same pickup
     // identity for the static map layout — required for multiplayer sync.
-    this._spawnPickup({ id: 'static_0', type: 'weapon', weaponId: 'sword', label: 'Sword', position: [3, 0.4, 2] });
-    this._spawnPickup({ id: 'static_1', type: 'weapon', weaponId: 'axe', label: 'Axe', position: [-9, 0.4, -2] });
-    this._spawnPickup({ id: 'static_2', type: 'weapon', weaponId: 'spear', label: 'Spear', position: [16, 0.4, -8] });
-    this._spawnPickup({ id: 'static_3', type: 'health', amount: 50, label: 'Health Pack', position: [-4, 0.4, 8] });
-    this._spawnPickup({ id: 'static_4', type: 'coin', amount: 10, label: 'Coins', position: [0, 0.4, 3] });
-    this._spawnPickup({ id: 'static_5', type: 'resource', amount: 5, label: 'Wood', position: [-2, 0.4, -8] });
+    this._staticPickupDefs = [
+      { id: 'static_0', type: 'weapon', weaponId: 'sword', label: 'Sword', position: [3, 0.4, 2] },
+      { id: 'static_1', type: 'weapon', weaponId: 'axe', label: 'Axe', position: [-9, 0.4, -2] },
+      { id: 'static_2', type: 'weapon', weaponId: 'spear', label: 'Spear', position: [16, 0.4, -8] },
+      { id: 'static_3', type: 'health', amount: 50, label: 'Health Pack', position: [-4, 0.4, 8] },
+      { id: 'static_4', type: 'coin', amount: 10, label: 'Coins', position: [0, 0.4, 3] },
+      { id: 'static_5', type: 'resource', amount: 5, label: 'Wood', position: [-2, 0.4, -8] },
+    ];
+    for (const def of this._staticPickupDefs) this._spawnPickup(def);
+  }
+
+  // Used when leaving a match: puts back anything that was picked up and
+  // removes weapons other players dropped, so the next match starts from a
+  // clean map instead of one with last match's items missing.
+  resetMapPickups() {
+    for (const p of [...this.pickups]) if (!String(p.id).startsWith('static_')) this.removePickup(p);
+    for (const def of this._staticPickupDefs || []) if (!this.getPickupById(def.id)) this._spawnPickup(def);
   }
 
   getPickupById(id) { return this.pickups.find((p) => p.id === id) || null; }
@@ -3141,7 +3174,10 @@ class MultiplayerManager {
     this._$('mm-solo-btn').addEventListener('click', () => this.lobbyEl.classList.add('hidden'));
     this._$('mm-play-btn').addEventListener('click', () => this._startParty());
     this._$('mm-ready-btn').addEventListener('click', () => this._toggleReady());
-    this._$('mm-start-btn').addEventListener('click', () => this.net.sendRaw({ t: 'start-match' }));
+    this._$('mm-start-btn').addEventListener('click', () => this._requestStart());
+    this._$('mm-hud-menu-btn').addEventListener('click', () => { this._$('mm-leave-confirm').style.display = 'flex'; });
+    this._$('mm-leave-no').addEventListener('click', () => { this._$('mm-leave-confirm').style.display = 'none'; });
+    this._$('mm-leave-yes').addEventListener('click', () => { this._$('mm-leave-confirm').style.display = 'none'; this._leaveParty(); });
     this._$('mm-leave-btn').addEventListener('click', () => this._leaveParty());
     this._$('mm-id-btn').addEventListener('click', () => this._onIdChipClick());
     this._$('mm-share-btn').addEventListener('click', () => this._shareMyId());
@@ -3185,6 +3221,9 @@ class MultiplayerManager {
   _serverUrl() { return this._normalizeUrl(this._savedServer || DEFAULT_SERVER_URL); }
   _openSettings() {
     this._$('mm-server-input').value = this._savedServer || DEFAULT_SERVER_URL || '';
+    this._$('mm-server-ver').textContent = this.hubId
+      ? `Connected. Server version: ${this.serverVersion}`
+      : 'Not connected to a server yet.';
     this._$('mm-settings').style.display = 'flex';
   }
   _saveServer() {
@@ -3427,7 +3466,15 @@ class MultiplayerManager {
   _startParty() {
     if (!this.net.connected || !this.hubId) {
       this._showToast('Connecting to the server...');
-      this._connectHub();
+      if (!this.net.connected) this._connectHub();
+      // Socket open but no hub-welcome = the server is running OLD code.
+      clearTimeout(this._outdatedTimer);
+      this._outdatedTimer = setTimeout(() => {
+        if (this.net.connected && !this.hubId) {
+          this._setPill('bad', 'Server outdated');
+          this._showToast('Your game server is running old code. Redeploy server/server.js on Render.');
+        }
+      }, 3000);
       return;
     }
     const btn = this._$('mm-play-btn');
@@ -3453,6 +3500,29 @@ class MultiplayerManager {
     this._$('mm-party').style.display = inParty ? 'block' : 'none';
     this._$('mm-play-btn').disabled = false;
     clearTimeout(this._playTimer);
+  }
+
+  // Gives the host's START button real feedback: a "STARTING..." state, and a
+  // plain-language message if the server never answers (usually: Render is
+  // still running an old server.js because a deploy failed).
+  _requestStart() {
+    if (!this.net.connected) { this._showToast('Not connected to the server'); return; }
+    const btn = this._$('mm-start-btn');
+    btn.disabled = true;
+    btn.textContent = 'STARTING...';
+    this.net.sendRaw({ t: 'start-match' });
+    clearTimeout(this._startTimer);
+    this._startTimer = setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = 'START MATCH';
+      this._showToast('The server did not start the match. Check that Render is running the latest server.js.');
+    }, 4000);
+  }
+  _clearStartPending() {
+    clearTimeout(this._startTimer);
+    const btn = this._$('mm-start-btn');
+    btn.disabled = false;
+    btn.textContent = 'START MATCH';
   }
 
   _toggleReady() {
@@ -3498,6 +3568,10 @@ class MultiplayerManager {
   }
 
   _resetRoomState() {
+    this._clearStartPending();
+    this._$('mm-hud-menu-btn').style.display = 'none';
+    this._$('mm-leave-confirm').style.display = 'none';
+    this._resetLocalPlayerForMenu();
     this.active = false;
     this.inRoom = false;
     this.roomCode = null;
@@ -3508,6 +3582,20 @@ class MultiplayerManager {
     this._setPartyView(false);
     this.lobbyEl.classList.remove('hidden');
     this._setStatus('', this.net.connected ? 'Online' : 'Offline');
+  }
+
+  // Back to the menu mid-match: undo anything the match changed locally so
+  // the next one starts clean (alive + full health, items back on the map).
+  _resetLocalPlayerForMenu() {
+    const p = this.game.player;
+    p.health = p.maxHealth;
+    p.alive = true;
+    if (p.mesh) p.mesh.visible = true;
+    clearInterval(this._pendingRespawn);
+    this._$('death-overlay').classList.remove('show');
+    this._$('local-health-wrap').classList.remove('active');
+    this.game.world.resetMapPickups();
+    this.game.raycastManager.markDirty();
   }
 
   _leaveParty() {
@@ -3551,8 +3639,10 @@ class MultiplayerManager {
 
   _onMatchStarted() {
     this.active = true;
+    this._clearStartPending();
     this.lobbyEl.classList.add('hidden');
     this._$('local-health-wrap').classList.add('active');
+    this._$('mm-hud-menu-btn').style.display = 'block';
   }
 
   // ---------- Invitations (live, over the game-server socket) ----------
@@ -3591,6 +3681,7 @@ class MultiplayerManager {
     const n = this.net;
     n.on('hub-welcome', (msg) => {
       this.hubId = msg.hubId;
+      this.serverVersion = msg.version || 'unknown';
       clearTimeout(this._hubTimer);
       this._setPill('ok', 'Online');
     });
@@ -3617,6 +3708,7 @@ class MultiplayerManager {
       this._showToast(message);
       this._resetRoomState();
     });
+    n.on('notice', (msg) => { this._clearStartPending(); this._showToast(msg.message); });
     n.on('invited', (msg) => this._onInvited(msg));
     n.on('invite-sent', (msg) => this._showToast(`Invite sent to ${msg.toName}`));
     n.on('invite-error', (msg) => this._showToast(msg.message));
@@ -3661,6 +3753,10 @@ class MultiplayerManager {
         enemy.alive = false;
         enemy.mesh.rotation.z = Math.PI / 2.2;
         enemy.mesh.position.y = 0.2;
+      } else if (b.alive && !enemy.alive) { // died in a previous match, alive in this one
+        enemy.alive = true;
+        enemy.mesh.rotation.z = 0;
+        enemy.mesh.position.y = b.y;
       }
     }
   }
