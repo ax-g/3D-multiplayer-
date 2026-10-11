@@ -419,103 +419,109 @@ html, body {
 }
 #loading-screen.hidden { opacity: 0; pointer-events: none; }
 
-/* ===================== MULTIPLAYER UI ===================== */
+/* ===================== MULTIPLAYER MENU ===================== */
 #mp-lobby {
-  position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
-  background: rgba(8,9,12,0.94);
-  z-index: 90;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  color: #fff;
-  font-family: 'Segoe UI', Arial, sans-serif;
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 90;
+  background: radial-gradient(ellipse at 30% 20%, #1c2a4a 0%, #0b0f1c 60%, #07090f 100%);
+  color: #fff; font-family: 'Segoe UI', Arial, sans-serif; pointer-events: auto;
 }
-/* display:none (not just opacity) — a full-screen backdrop-filter left
-   merely at opacity:0 still gets composited every frame on most mobile
-   GPUs, which is what was tanking FPS to ~1 once the lobby was dismissed.
-   No blur, and fully removed from the render tree once hidden. */
+/* display:none (never just opacity) — a hidden full-screen layer must leave
+   the render tree or it keeps costing GPU time over the 3D canvas. */
 #mp-lobby.hidden { display: none; }
-#mp-lobby .mp-box {
-  background: rgba(30,32,42,0.85);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  padding: 22px 26px;
-  width: min(340px, 88vw);
-  max-height: 82vh;
-  overflow-y: auto;
+.mm-screen { position: absolute; inset: 0; display: flex; flex-direction: column; }
+#mm-login { align-items: center; justify-content: center; }
+.mm-card { background: rgba(24,28,42,0.96); border: 1px solid rgba(255,255,255,0.12); border-radius: 14px; padding: 18px 20px; width: min(340px, 90vw); max-height: 92vh; overflow-y: auto; }
+.mm-card.mm-wide { width: min(520px, 94vw); }
+.mm-card h3 { font-size: 16px; margin-bottom: 8px; }
+.mm-login-card { text-align: center; }
+.mm-logo { font-size: 22px; font-weight: 800; letter-spacing: 4px; margin-bottom: 14px; color: #ffcc33; }
+.mm-hint { font-size: 12px; opacity: 0.65; margin: 8px 0; line-height: 1.4; }
+.mm-or { display: flex; align-items: center; gap: 10px; font-size: 11px; opacity: 0.5; margin: 10px 0; }
+.mm-or::before, .mm-or::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.2); }
+.mm-error { color: #ff7b7b; font-size: 12px; min-height: 16px; margin-top: 6px; }
+#mp-lobby input, #mp-lobby textarea {
+  width: 100%; box-sizing: border-box; padding: 11px 12px; border-radius: 8px; font-size: 15px;
+  border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.35); color: #fff; margin-bottom: 8px; font-family: inherit;
 }
-#mp-lobby h2 { font-size: 16px; letter-spacing: 1px; margin-bottom: 14px; text-align: center; }
-#mp-lobby label { display: block; font-size: 11px; opacity: 0.7; margin: 10px 0 4px; }
-#mp-lobby input {
-  width: 100%; box-sizing: border-box; padding: 9px 10px;
-  border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
-  background: rgba(0,0,0,0.35); color: #fff; font-size: 14px;
-  text-transform: uppercase;
+#mp-lobby textarea { font-family: monospace; font-size: 11px; resize: none; }
+.mm-btn {
+  display: block; width: 100%; box-sizing: border-box; cursor: pointer; border: none; border-radius: 10px;
+  padding: 13px 14px; font-size: 14px; font-weight: 700; letter-spacing: 0.5px; color: #fff;
+  background: linear-gradient(180deg, #3d7bff, #2459d8); box-shadow: 0 3px 0 rgba(0,0,0,0.35);
 }
-#mp-lobby input#mp-name-input { text-transform: none; }
-#mp-lobby .mp-row { display: flex; gap: 8px; margin-top: 14px; }
-#mp-lobby button {
-  flex: 1; pointer-events: auto; cursor: pointer;
-  padding: 10px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.25);
-  background: rgba(47,111,237,0.55); color: #fff; font-size: 12px; font-weight: bold;
-  letter-spacing: 0.5px;
-}
-#mp-lobby button.secondary { background: rgba(255,255,255,0.08); }
-#mp-lobby button:disabled { opacity: 0.5; cursor: default; }
-#mp-lobby #mp-error { color: #ff6b6b; font-size: 12px; margin-top: 10px; min-height: 14px; }
-#mp-lobby #mp-room-info { font-size: 12px; opacity: 0.85; margin-top: 12px; line-height: 1.5; }
-#mp-lobby #mp-room-code-display { font-size: 22px; font-weight: bold; letter-spacing: 3px; color: #ffcc33; text-align: center; margin: 6px 0; }
-#mp-lobby #mp-player-list { list-style: none; margin-top: 8px; font-size: 12px; max-height: 140px; overflow-y: auto; }
-#mp-lobby #mp-player-list li { padding: 3px 0; opacity: 0.85; border-bottom: 1px solid rgba(255,255,255,0.06); }
-#mp-lobby #mp-server-row { margin-top: 10px; }
-#mp-profile-summary { font-size: 12px; text-align: center; margin-bottom: 10px; color: #9dffb0; }
-#mp-friends-list li { padding: 2px 0; opacity: 0.85; }
-#mp-google-btn { background: rgba(255,255,255,0.12) !important; }
+.mm-btn:active { transform: translateY(2px); box-shadow: none; }
+.mm-btn:disabled { opacity: 0.5; cursor: default; }
+.mm-btn-light { background: #fff; color: #222; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.mm-g { font-weight: 900; color: #4285f4; font-size: 17px; }
+.mm-btn-big { font-size: 20px; padding: 18px 14px; background: linear-gradient(180deg, #ffb300, #ff8a00); color: #1a1100; }
+.mm-btn-go { background: linear-gradient(180deg, #2fd673, #159a4d); }
+.mm-btn-warn { background: linear-gradient(180deg, #ff6b4a, #d63a1c); margin: 6px 0; }
+.mm-btn-ghost { background: rgba(255,255,255,0.1); box-shadow: none; font-weight: 600; }
+.mm-btn-sm { display: inline-block; width: auto; padding: 9px 14px; font-size: 12px; }
+.mm-link { background: none; border: none; color: #8fb8ff; text-decoration: underline; font-size: 12px; padding: 10px 4px; cursor: pointer; }
+.mm-row2 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
 
-/* ===== Friends Hub / Game Lobby (Player ID, friends, invites) ===== */
-#mp-lobby button.small { padding: 6px 10px; font-size: 10px; flex: 0 0 auto; }
-.link-btn {
-  background: none !important; border: none !important; color: #8fb8ff !important;
-  text-decoration: underline; font-size: 11px; padding: 6px 0 !important; cursor: pointer; width: auto;
+.mm-topbar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: rgba(0,0,0,0.35); border-bottom: 1px solid rgba(255,255,255,0.08); }
+.mm-avatar { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; flex: 0 0 auto; border: 2px solid rgba(255,255,255,0.4); }
+.mm-who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mm-name { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-idchip { background: rgba(255,204,51,0.15); color: #ffcc33; border: 1px dashed rgba(255,204,51,0.5); border-radius: 6px; font-family: monospace; font-size: 12px; padding: 2px 8px; cursor: pointer; text-align: left; }
+.mm-xp { font-size: 12px; opacity: 0.7; }
+.mm-spacer { flex: 1; }
+.mm-icon-btn { background: rgba(255,255,255,0.1); border: none; color: #fff; border-radius: 8px; padding: 9px 12px; font-size: 12px; font-weight: 700; cursor: pointer; }
+.mm-pill { display: flex; align-items: center; gap: 6px; font-size: 12px; background: rgba(0,0,0,0.4); border-radius: 20px; padding: 7px 12px; white-space: nowrap; }
+.mm-dot { width: 9px; height: 9px; border-radius: 50%; background: #ffcc33; }
+.mm-pill.ok .mm-dot { background: #33ff77; }
+.mm-pill.bad .mm-dot { background: #ff4b4b; }
+
+.mm-body { flex: 1; display: flex; gap: 14px; padding: 14px; min-height: 0; }
+.mm-left { flex: 0 0 38%; display: flex; flex-direction: column; justify-content: center; gap: 10px; min-width: 0; overflow-y: auto; }
+.mm-right { flex: 1; display: flex; flex-direction: column; background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; min-width: 0; min-height: 0; }
+.mm-sub { font-size: 12px; opacity: 0.65; line-height: 1.4; text-align: center; margin: 4px 0; }
+.mm-party-head { display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; letter-spacing: 1px; opacity: 0.8; margin-bottom: 6px; }
+.mm-tabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.mm-tab { flex: 1; background: none; border: none; color: rgba(255,255,255,0.55); font-size: 12px; font-weight: 700; letter-spacing: 0.5px; padding: 12px 6px; cursor: pointer; border-bottom: 3px solid transparent; }
+.mm-tab.active { color: #fff; border-bottom-color: #ffb300; }
+.mm-badge { background: rgba(255,255,255,0.15); border-radius: 10px; padding: 1px 7px; font-size: 11px; margin-left: 3px; }
+.mm-badge.hot { background: #ff3b3b; }
+.mm-tabpane { flex: 1; overflow-y: auto; padding: 8px 10px; min-height: 0; }
+.mm-addrow { display: flex; gap: 8px; align-items: flex-start; }
+.mm-addrow input { margin-bottom: 0; }
+.mm-list { list-style: none; }
+.mm-list li { display: flex; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.mm-list .mm-avatar { width: 34px; height: 34px; font-size: 15px; border-width: 1px; }
+.mm-item-main { flex: 1; min-width: 0; }
+.mm-item-name { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mm-item-sub { font-size: 11px; opacity: 0.6; display: flex; align-items: center; gap: 5px; }
+.mm-st { width: 7px; height: 7px; border-radius: 50%; background: #666; display: inline-block; }
+.mm-st.online { background: #33ff77; } .mm-st.in_lobby { background: #ffcc33; } .mm-st.in_game { background: #4ad1c0; }
+.mm-list button { width: auto; padding: 8px 12px; font-size: 11px; flex: 0 0 auto; }
+.mm-empty { justify-content: center; opacity: 0.55; font-size: 13px; padding: 22px 8px !important; text-align: center; }
+.mm-star { color: #ffcc33; margin-left: 4px; }
+.mm-crown { margin-right: 2px; }
+.mm-ready { color: #33ff77; font-size: 11px; font-weight: 700; }
+.mm-wait { opacity: 0.55; font-size: 11px; }
+.mm-modal { position: absolute; inset: 0; z-index: 5; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; }
+.mm-steps { font-size: 12px; line-height: 1.5; margin: 6px 0 10px 18px; opacity: 0.9; }
+#mm-invite-popup {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 120;
+  background: rgba(24,28,42,0.98); border: 1px solid rgba(255,204,51,0.6); border-radius: 12px;
+  padding: 14px 18px; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; width: min(320px, 90vw);
+  text-align: center; box-shadow: 0 8px 28px rgba(0,0,0,0.6); pointer-events: auto;
 }
-#mp-id-card {
-  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.15); border-radius: 8px;
-  padding: 10px 12px; margin-bottom: 12px; text-align: center;
+#mm-invite-text { font-size: 14px; font-weight: 600; }
+#mm-invite-popup .mm-row2 { justify-content: center; }
+#mm-toast {
+  position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 130;
+  background: rgba(0,0,0,0.85); color: #fff; padding: 10px 16px; border-radius: 20px; font-size: 13px;
+  font-family: 'Segoe UI', Arial, sans-serif; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: 90vw; text-align: center;
 }
-.mp-id-label { font-size: 10px; opacity: 0.7; letter-spacing: 0.5px; }
-#mp-my-id { font-family: monospace; font-size: 18px; color: #ffcc33; font-weight: bold; margin: 4px 0 8px; word-break: break-all; }
-.mp-section-title { font-size: 11px; opacity: 0.7; letter-spacing: 0.5px; margin: 14px 0 6px; text-transform: uppercase; }
-.mp-entity-list { list-style: none; max-height: 160px; overflow-y: auto; }
-.mp-entity-list li {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 7px 4px; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 13px;
+#mm-toast.show { opacity: 1; }
+@media (max-width: 720px) {
+  .mm-body { flex-direction: column; overflow-y: auto; }
+  .mm-left { flex: 0 0 auto; }
+  .mm-right { min-height: 260px; }
 }
-.mp-entity-list .mp-entity-name { display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mp-entity-list .mp-entity-id { font-size: 10px; opacity: 0.55; font-family: monospace; }
-.mp-status-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: #666; }
-.mp-status-dot.online { background: #33ff77; }
-.mp-status-dot.in_lobby { background: #ffcc33; }
-.mp-status-dot.in_game { background: #4ad1c0; }
-.mp-entity-list button { padding: 5px 10px; font-size: 10px; flex: 0 0 auto; width: auto; }
-.mp-entity-empty { font-size: 12px; opacity: 0.55; padding: 8px 4px; }
-#mp-lobby-roster .mp-host-crown { margin-right: 2px; }
-#mp-lobby-roster .mp-ready-tag { font-size: 10px; color: #33ff77; }
-#mp-lobby-roster .mp-waiting-tag { font-size: 10px; opacity: 0.6; }
-.mp-overlay-modal {
-  position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 95;
-  background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;
-}
-#mp-invite-popup {
-  position: absolute; top: 60px; left: 50%; transform: translateX(-50%); z-index: 96;
-  background: rgba(25,27,36,0.97); border: 1px solid rgba(255,255,255,0.2); border-radius: 10px;
-  padding: 14px 18px; color: #fff; font-family: 'Segoe UI', Arial, sans-serif; width: min(300px, 86vw);
-  pointer-events: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-}
-#mp-invite-popup-text { font-size: 13px; margin-bottom: 10px; text-align: center; }
-#mp-invite-popup button { padding: 8px; font-size: 12px; }
 
 #mp-status {
   position: absolute;
@@ -668,104 +674,117 @@ html, body {
     </div>
 
     <div id="mp-lobby">
-      <div class="mp-box">
-        <h2>MULTIPLAYER</h2>
+      <!-- ============ LOGIN ============ -->
+      <div id="mm-login" class="mm-screen">
+        <div class="mm-card mm-login-card">
+          <div class="mm-logo">MULTIPLAYER</div>
+          <button id="mm-google-btn" class="mm-btn mm-btn-light"><span class="mm-g">G</span> Sign in with Google</button>
+          <div class="mm-hint">Saves your progress, gives you a Player ID and lets you add friends.</div>
+          <div class="mm-or"><span>or</span></div>
+          <input id="mm-guest-name" type="text" placeholder="Your name" maxlength="16" autocomplete="off" />
+          <button id="mm-guest-btn" class="mm-btn">PLAY AS GUEST</button>
+          <div id="mm-login-error" class="mm-error"></div>
+          <button id="mm-solo-login-btn" class="mm-link">Play offline (solo)</button>
+        </div>
+      </div>
 
-        <div id="mp-login-view">
-          <div id="mp-profile-summary" style="display:none;"></div>
-          <div class="mp-row">
-            <button id="mp-google-btn">SIGN IN WITH GOOGLE</button>
+      <!-- ============ MAIN MENU ============ -->
+      <div id="mm-menu" class="mm-screen" style="display:none;">
+        <div class="mm-topbar">
+          <div id="mm-avatar" class="mm-avatar">?</div>
+          <div class="mm-who">
+            <div id="mm-name" class="mm-name">Player</div>
+            <button id="mm-id-btn" class="mm-idchip" style="display:none;"></button>
           </div>
-          <label for="mp-guest-name-input">Or play as a guest</label>
-          <input id="mp-guest-name-input" type="text" placeholder="Your name" maxlength="16" style="text-transform:none;" />
-          <div class="mp-row">
-            <button id="mp-guest-btn" class="secondary">CONTINUE AS GUEST</button>
-          </div>
-          <div id="mp-login-error" style="color:#ff6b6b;font-size:12px;margin-top:8px;min-height:14px;"></div>
+          <div id="mm-xp" class="mm-xp"></div>
+          <div class="mm-spacer"></div>
+          <button id="mm-share-btn" class="mm-icon-btn" style="display:none;">SHARE ID</button>
+          <div id="mm-server-pill" class="mm-pill"><span class="mm-dot"></span><span id="mm-server-text">Connecting...</span></div>
+          <button id="mm-settings-btn" class="mm-icon-btn" aria-label="Settings">&#9881;</button>
         </div>
 
-        <!-- FRIENDS HUB: Player ID, search/add friends, requests, friends list, Play -->
-        <div id="mp-hub-view" style="display:none;">
-          <div id="mp-profile-summary"></div>
+        <div class="mm-body">
+          <div class="mm-left">
+            <div id="mm-home">
+              <button id="mm-play-btn" class="mm-btn mm-btn-big">&#9654; PLAY</button>
+              <div class="mm-sub">Press Play to start a party, then tap <b>INVITE</b> next to any player.</div>
+              <button id="mm-solo-btn" class="mm-btn mm-btn-ghost">Play offline (solo)</button>
+            </div>
 
-          <div id="mp-id-card">
-            <div class="mp-id-label">Your Player ID</div>
-            <div id="mp-my-id">----</div>
-            <div class="mp-row">
-              <button id="mp-copy-id-btn" class="secondary small">COPY ID</button>
-              <button id="mp-share-id-btn" class="secondary small">SHARE ID</button>
+            <div id="mm-party" style="display:none;">
+              <div class="mm-party-head"><span>YOUR PARTY</span><span id="mm-party-count">1/8</span></div>
+              <ul id="mm-party-list" class="mm-list"></ul>
+              <button id="mm-ready-btn" class="mm-btn mm-btn-big">READY</button>
+              <button id="mm-start-btn" class="mm-btn mm-btn-go" style="display:none;">START MATCH</button>
+              <div id="mm-party-hint" class="mm-sub"></div>
+              <button id="mm-leave-btn" class="mm-link">Leave party</button>
             </div>
           </div>
 
-          <label for="mp-search-input">Add a friend by Player ID</label>
-          <div style="display:flex; gap:6px;">
-            <input id="mp-search-input" type="text" placeholder="e.g. ani_20" style="text-transform:none; flex:1;" />
-            <button id="mp-search-btn" class="secondary" style="flex:0 0 auto; padding:9px 12px;">ADD</button>
-          </div>
-          <div id="mp-friend-error" style="color:#ff6b6b;font-size:12px;margin-top:6px;min-height:14px;"></div>
-
-          <div id="mp-requests-section" style="display:none;">
-            <div class="mp-section-title">Friend requests</div>
-            <ul id="mp-requests-list" class="mp-entity-list"></ul>
-          </div>
-
-          <div class="mp-section-title">Friends</div>
-          <ul id="mp-friends-list" class="mp-entity-list"></ul>
-
-          <div class="mp-row" style="margin-top:14px;">
-            <button id="mp-play-btn">PLAY</button>
-          </div>
-          <button id="mp-advanced-toggle" class="link-btn">Have a room code?</button>
-          <div id="mp-advanced-join" style="display:none;">
-            <label for="mp-server-input">Server address</label>
-            <input id="mp-server-input" type="text" placeholder="wss://your-server.example.com" style="text-transform:none;" />
-            <label for="mp-room-input">Room code</label>
-            <input id="mp-room-input" type="text" placeholder="e.g. AB3F" maxlength="6" />
-            <div class="mp-row">
-              <button id="mp-join-code-btn" class="secondary">JOIN BY CODE</button>
+          <div class="mm-right">
+            <div class="mm-tabs">
+              <button class="mm-tab active" data-tab="online">ONLINE <span id="mm-online-count" class="mm-badge">0</span></button>
+              <button class="mm-tab" data-tab="friends">FRIENDS <span id="mm-friends-count" class="mm-badge">0</span></button>
+              <button class="mm-tab" data-tab="requests">REQUESTS <span id="mm-requests-count" class="mm-badge hot" style="display:none;">0</span></button>
+            </div>
+            <div id="mm-tab-online" class="mm-tabpane">
+              <ul id="mm-online-list" class="mm-list"></ul>
+            </div>
+            <div id="mm-tab-friends" class="mm-tabpane" style="display:none;">
+              <div class="mm-addrow">
+                <input id="mm-add-input" type="text" placeholder="Friend's Player ID, e.g. ani_20" autocomplete="off" autocapitalize="off" />
+                <button id="mm-add-btn" class="mm-btn mm-btn-sm">ADD</button>
+              </div>
+              <div id="mm-add-error" class="mm-error"></div>
+              <button id="mm-fix-btn" class="mm-btn mm-btn-warn" style="display:none;">FIX PERMISSIONS</button>
+              <ul id="mm-friends-list" class="mm-list"></ul>
+            </div>
+            <div id="mm-tab-requests" class="mm-tabpane" style="display:none;">
+              <ul id="mm-requests-list" class="mm-list"></ul>
             </div>
           </div>
-          <div class="mp-row">
-            <button id="mp-solo-btn" class="secondary">PLAY SOLO (OFFLINE)</button>
-          </div>
-          <div id="mp-error"></div>
-        </div>
-
-        <!-- GAME LOBBY: roster, ready, host-only start, shown after Play/Join, before the match actually begins -->
-        <div id="mp-game-lobby-view" style="display:none;">
-          <h2>GAME LOBBY</h2>
-          <ul id="mp-lobby-roster" class="mp-entity-list"></ul>
-          <div class="mp-row">
-            <button id="mp-invite-btn" class="secondary">INVITE FRIENDS</button>
-          </div>
-          <div class="mp-row">
-            <button id="mp-ready-btn">READY</button>
-          </div>
-          <div class="mp-row">
-            <button id="mp-start-match-btn" style="display:none;">START MATCH</button>
-          </div>
-          <button id="mp-leave-lobby-btn" class="link-btn">Leave lobby</button>
         </div>
       </div>
-    </div>
 
-    <!-- Invite-a-friend picker, opened from the game lobby -->
-    <div id="mp-invite-modal" class="mp-overlay-modal" style="display:none;">
-      <div class="mp-box">
-        <h2>INVITE A FRIEND</h2>
-        <ul id="mp-invite-friend-list" class="mp-entity-list"></ul>
-        <div class="mp-row"><button id="mp-invite-close-btn" class="secondary">CLOSE</button></div>
+      <!-- ============ SETTINGS ============ -->
+      <div id="mm-settings" class="mm-modal" style="display:none;">
+        <div class="mm-card">
+          <h3>Game server</h3>
+          <div class="mm-hint">Paste your server address from Render, e.g. <b>https://my-game.onrender.com</b></div>
+          <input id="mm-server-input" type="text" placeholder="https://your-game.onrender.com" autocomplete="off" autocapitalize="off" />
+          <button id="mm-server-save" class="mm-btn">SAVE &amp; CONNECT</button>
+          <button id="mm-settings-close" class="mm-link">Close</button>
+        </div>
+      </div>
+
+      <!-- ============ FIX PERMISSIONS HELP ============ -->
+      <div id="mm-help" class="mm-modal" style="display:none;">
+        <div class="mm-card mm-wide">
+          <h3>Fix friends permissions</h3>
+          <ol class="mm-steps">
+            <li>Firebase Console &rarr; <b>Build &rarr; Firestore Database</b> (press <i>Create database</i> if you haven't).</li>
+            <li>Open the <b>Rules</b> tab, delete everything, paste the text below, press <b>Publish</b>.</li>
+            <li>Come back here and press <b>RETRY</b>.</li>
+          </ol>
+          <textarea id="mm-rules-text" readonly rows="7"></textarea>
+          <div class="mm-row2">
+            <button id="mm-copy-rules" class="mm-btn mm-btn-sm">COPY RULES</button>
+            <button id="mm-help-retry" class="mm-btn mm-btn-sm mm-btn-go">RETRY</button>
+            <button id="mm-help-close" class="mm-link">Close</button>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- Incoming game invitation toast -->
-    <div id="mp-invite-popup" style="display:none;">
-      <div id="mp-invite-popup-text"></div>
-      <div class="mp-row">
-        <button id="mp-invite-join-btn">JOIN</button>
-        <button id="mp-invite-decline-btn" class="secondary">DECLINE</button>
+    <!-- Incoming game invitation -->
+    <div id="mm-invite-popup" style="display:none;">
+      <div id="mm-invite-text"></div>
+      <div class="mm-row2">
+        <button id="mm-invite-join" class="mm-btn mm-btn-sm mm-btn-go">JOIN</button>
+        <button id="mm-invite-decline" class="mm-btn mm-btn-sm mm-btn-ghost">DECLINE</button>
       </div>
     </div>
+    <div id="mm-toast"></div>
   </div>
 
   <script type="importmap">
@@ -805,6 +824,18 @@ import {
 // localStorage from then on — handy for testing before you deploy.
 const DEFAULT_SERVER_URL = '';
 
+// Shown in the in-app "FIX PERMISSIONS" help. Friends (and Player IDs) are
+// the only things stored in Firestore; this simple rule lets any signed-in
+// player read/write them. (Gameplay never touches Firestore.)
+const FIRESTORE_RULES_TEXT = `rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}`;
+
 const firebaseConfig = {
   apiKey: "AIzaSyBi4nO7pNlb8X8_EwtqqOkQnONsiUlDpgw",
   authDomain: "streaming-world-787bd.firebaseapp.com",
@@ -829,10 +860,7 @@ class FirebaseManager {
     this.profile = null; // { displayName, playerId, presence:{status,lobbyRoom,updatedAt}, stats:{kills,deaths,xp}, inventory:[...] }
     this._listeners = new Map();
     this._saveTimer = null;
-    this._heartbeatTimer = null;
     this._unsubRequests = null;
-    this._unsubInvitesA = null;
-    this._unsubInvitesB = null; // unused today, kept symmetric with the two-query friends pattern below
     if (fbReady) {
       onAuthStateChanged(fbAuth, (user) => this._onAuthChanged(user));
       // Popup-based sign-in (signInWithPopup) is unreliable on mobile
@@ -849,12 +877,6 @@ class FirebaseManager {
         this._emit('error', { message: 'Google sign-in failed: ' + err.message });
       });
     }
-    // Best-effort presence cleanup — not fully reliable on mobile (there is
-    // no guaranteed "tab closed" signal without a realtime-DB onDisconnect
-    // hook), but covers the common cases together with the stale-presence
-    // check friends apply client-side (see Game.FriendsHub below).
-    window.addEventListener('pagehide', () => this._setPresenceOffline());
-    window.addEventListener('beforeunload', () => this._setPresenceOffline());
   }
 
   on(event, fn) {
@@ -869,10 +891,7 @@ class FirebaseManager {
     try {
       await this._loadOrCreateProfile();
       this._emit('signedIn', this.profile);
-      this.updatePresence('online');
-      this._startPresenceHeartbeat();
       this._listenIncomingRequests();
-      this._listenInvitations();
     } catch (err) {
       this._emit('error', { message: 'Could not load your profile: ' + err.message });
     }
@@ -917,7 +936,6 @@ class FirebaseManager {
       this.profile = {
         displayName: this.user.displayName || 'Player', createdAt: Date.now(), playerId,
         stats: { kills: 0, deaths: 0, xp: 0 }, inventory: [],
-        presence: { status: 'online', lobbyRoom: null, updatedAt: Date.now() },
       };
       await setDoc(ref, this.profile);
     }
@@ -955,73 +973,84 @@ class FirebaseManager {
     }, 2500);
   }
 
-  // ---------- Presence ----------
-  // online | in_lobby | in_game | offline. A heartbeat keeps `updatedAt`
-  // fresh every ~20s so viewers can treat a stale timestamp as effectively
-  // offline even if the real 'offline' write never landed (mobile tabs
-  // dying without a clean close event is the normal case, not the
-  // exception) — see FriendsHub._presenceLabel().
-  async updatePresence(status, lobbyRoom) {
-    if (!this.profile) return;
-    this.profile.presence = { status, lobbyRoom: lobbyRoom || null, updatedAt: Date.now() };
-    if (!this._canPersist()) return;
-    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { presence: this.profile.presence }); } catch (err) { console.warn(err); }
-  }
-  _setPresenceOffline() {
-    if (!this._canPersist()) return;
-    // Fire-and-forget on page teardown — nothing can await here reliably.
-    updateDoc(doc(fbDb, 'players', this.user.uid), { presence: { status: 'offline', lobbyRoom: null, updatedAt: Date.now() } }).catch(() => {});
-  }
-  _startPresenceHeartbeat() {
-    clearInterval(this._heartbeatTimer);
-    if (!this._canPersist()) return;
-    this._heartbeatTimer = setInterval(() => {
-      if (this.profile?.presence) this.updatePresence(this.profile.presence.status, this.profile.presence.lobbyRoom);
-    }, 20000);
+  // ---------- Friends: search / requests ----------
+  // Firestore says "Missing or insufficient permissions" when the project's
+  // security rules haven't been published (the default after creating a
+  // database). Turn that into a clear message and tell the UI to show its
+  // one-tap "FIX PERMISSIONS" help.
+  _friendly(err) {
+    const denied = err && (err.code === 'permission-denied' || /insufficient permissions/i.test(err.message || ''));
+    if (denied) {
+      this._emit('permissionDenied', {});
+      const e = new Error('Friends are not set up yet. Tap FIX PERMISSIONS.');
+      e.code = 'permission-denied';
+      return e;
+    }
+    return err;
   }
 
-  // ---------- Friends: search / requests ----------
+  // Retry getting a Player ID (e.g. after fixing permissions) without
+  // needing to sign out and back in.
+  async ensurePlayerId() {
+    if (!this._canPersist() || !this.profile) throw new Error('Sign in with Google first.');
+    if (this.profile.playerId) return this.profile.playerId;
+    try {
+      const id = await allocatePlayerId(this.user.email, this.user.displayName, this.user.uid);
+      if (!id) throw new Error('Could not create a Player ID yet — fix permissions, then try again.');
+      this.profile.playerId = id;
+      await updateDoc(doc(fbDb, 'players', this.user.uid), { playerId: id });
+      return id;
+    } catch (err) { throw this._friendly(err); }
+  }
+
   async searchPlayerById(playerId) {
     playerId = (playerId || '').trim().toLowerCase();
-    if (!playerId) throw new Error('Enter a Player ID.');
-    if (!fbDb) throw new Error('Sign in with Google to search for players.');
-    const mapSnap = await getDoc(doc(fbDb, 'gameIds', playerId));
-    if (!mapSnap.exists()) throw new Error('No player found with that ID.');
-    const uid = mapSnap.data().uid;
-    const playerSnap = await getDoc(doc(fbDb, 'players', uid));
-    if (!playerSnap.exists()) throw new Error('No player found with that ID.');
-    return { uid, playerId, name: playerSnap.data().displayName || 'Player' };
+    if (!playerId) throw new Error('Type a Player ID first.');
+    if (!this._canPersist()) throw new Error('Sign in with Google to add friends (guests can\'t).');
+    try {
+      const mapSnap = await getDoc(doc(fbDb, 'gameIds', playerId));
+      if (!mapSnap.exists()) throw new Error('No player found with that ID.');
+      const uid = mapSnap.data().uid;
+      const playerSnap = await getDoc(doc(fbDb, 'players', uid));
+      if (!playerSnap.exists()) throw new Error('No player found with that ID.');
+      return { uid, playerId, name: playerSnap.data().displayName || 'Player' };
+    } catch (err) { throw this._friendly(err); }
   }
 
   async sendFriendRequest(playerId) {
-    if (!this._canPersist()) throw new Error('Sign in with Google to add friends.');
+    if (!this._canPersist()) throw new Error('Sign in with Google to add friends (guests can\'t).');
+    if (!this.profile.playerId) await this.ensurePlayerId();
     const target = await this.searchPlayerById(playerId);
     if (target.uid === this.user.uid) throw new Error("That's your own ID.");
-    // If they already sent US a request, accept it instead of creating a
-    // duplicate pending request in the other direction.
-    const reverseId = `${target.uid}_${this.user.uid}`;
-    const reverseSnap = await getDoc(doc(fbDb, 'friendRequests', reverseId));
-    if (reverseSnap.exists() && reverseSnap.data().status === 'pending') {
-      await this.acceptFriendRequest(reverseId);
-      return { autoAccepted: true, name: target.name };
-    }
-    const reqId = `${this.user.uid}_${target.uid}`;
-    await setDoc(doc(fbDb, 'friendRequests', reqId), {
-      from: this.user.uid, to: target.uid,
-      fromName: this.profile.displayName, fromPlayerId: this.profile.playerId,
-      toName: target.name, toPlayerId: target.playerId,
-      status: 'pending', createdAt: Date.now(),
-    });
-    return { autoAccepted: false, name: target.name };
+    try {
+      // If they already sent US a request, accept it instead of creating a
+      // duplicate pending request in the other direction.
+      const reverseId = `${target.uid}_${this.user.uid}`;
+      const reverseSnap = await getDoc(doc(fbDb, 'friendRequests', reverseId));
+      if (reverseSnap.exists() && reverseSnap.data().status === 'pending') {
+        await this.acceptFriendRequest(reverseId);
+        return { autoAccepted: true, name: target.name };
+      }
+      const reqId = `${this.user.uid}_${target.uid}`;
+      await setDoc(doc(fbDb, 'friendRequests', reqId), {
+        from: this.user.uid, to: target.uid,
+        fromName: this.profile.displayName, fromPlayerId: this.profile.playerId,
+        toName: target.name, toPlayerId: target.playerId,
+        status: 'pending', createdAt: Date.now(),
+      });
+      return { autoAccepted: false, name: target.name };
+    } catch (err) { throw this._friendly(err); }
   }
 
   async acceptFriendRequest(requestId) {
     if (!this._canPersist()) return;
-    await updateDoc(doc(fbDb, 'friendRequests', requestId), { status: 'accepted' });
+    try { await updateDoc(doc(fbDb, 'friendRequests', requestId), { status: 'accepted' }); }
+    catch (err) { throw this._friendly(err); }
   }
   async declineFriendRequest(requestId) {
     if (!this._canPersist()) return;
-    await updateDoc(doc(fbDb, 'friendRequests', requestId), { status: 'declined' });
+    try { await updateDoc(doc(fbDb, 'friendRequests', requestId), { status: 'declined' }); }
+    catch (err) { throw this._friendly(err); }
   }
 
   _listenIncomingRequests() {
@@ -1031,7 +1060,7 @@ class FirebaseManager {
     this._unsubRequests = onSnapshot(q, (snap) => {
       const requests = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       this._emit('friendRequests', requests);
-    }, (err) => console.warn('Friend-request listener error:', err));
+    }, (err) => { this._friendly(err); console.warn('Friend-request listener error:', err); });
   }
 
   // Firestore can't query "from == me OR to == me" in a single call without
@@ -1041,47 +1070,18 @@ class FirebaseManager {
     if (!fbDb || !this._canPersist()) return () => {};
     let outgoing = [], incoming = [];
     const emitMerged = () => callback([...outgoing, ...incoming]);
+    const onErr = (err) => { this._friendly(err); console.warn('Friends listener error:', err); };
     const qOut = query(collection(fbDb, 'friendRequests'), where('from', '==', this.user.uid), where('status', '==', 'accepted'));
     const qIn = query(collection(fbDb, 'friendRequests'), where('to', '==', this.user.uid), where('status', '==', 'accepted'));
     const unsubOut = onSnapshot(qOut, (snap) => {
       outgoing = snap.docs.map((d) => ({ uid: d.data().to, name: d.data().toName, playerId: d.data().toPlayerId }));
       emitMerged();
-    }, (err) => console.warn('Friends listener error:', err));
+    }, onErr);
     const unsubIn = onSnapshot(qIn, (snap) => {
       incoming = snap.docs.map((d) => ({ uid: d.data().from, name: d.data().fromName, playerId: d.data().fromPlayerId }));
       emitMerged();
-    }, (err) => console.warn('Friends listener error:', err));
+    }, onErr);
     return () => { unsubOut(); unsubIn(); };
-  }
-
-  async getPresence(uid) {
-    try {
-      const snap = await getDoc(doc(fbDb, 'players', uid));
-      return snap.exists() ? (snap.data().presence || null) : null;
-    } catch { return null; }
-  }
-
-  // ---------- Invitations ----------
-  async sendInvite(toUid, toName, roomCode) {
-    if (!this._canPersist()) throw new Error('Sign in with Google to invite friends.');
-    await addDoc(collection(fbDb, 'invitations'), {
-      from: this.user.uid, to: toUid,
-      fromName: this.profile.displayName, fromPlayerId: this.profile.playerId, toName,
-      roomCode, status: 'pending', createdAt: Date.now(),
-    });
-  }
-  async respondInvitation(invitationId, accept) {
-    if (!this._canPersist()) return;
-    await updateDoc(doc(fbDb, 'invitations', invitationId), { status: accept ? 'consumed' : 'declined' });
-  }
-  _listenInvitations() {
-    if (!fbDb || !this._canPersist()) return;
-    if (this._unsubInvitesA) this._unsubInvitesA();
-    const q = query(collection(fbDb, 'invitations'), where('to', '==', this.user.uid), where('status', '==', 'pending'));
-    this._unsubInvitesA = onSnapshot(q, (snap) => {
-      const invites = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      this._emit('invitations', invites);
-    }, (err) => console.warn('Invitation listener error:', err));
   }
 }
 
@@ -2807,20 +2807,25 @@ class UIManager {
 
 class NetworkManager {
   static SEND_HZ = 15;
-  static MAX_PRECONNECT_RETRIES = 4; // give up (not loop forever) if we never even reach a first 'welcome'
+  static MAX_PRECONNECT_RETRIES = 4; // give up (not loop forever) if we never even reach the server once
 
+  // ONE WebSocket per phone, for the whole session. It is first registered
+  // as an online "hub" presence (so other players can see and invite you),
+  // and the very same socket is then used to create/join/leave game rooms.
   constructor() {
     this.ws = null;
     this.url = null;
     this.name = 'Player';
-    this.room = '';
+    this.playerId = null;
+    this.room = '';          // room code the server assigned us (kept for auto-rejoin after a drop)
+    this._wantRoom = false;  // true while we should be (re)joined to a room
     this._listeners = new Map();
     this.connected = false;
     this._shouldReconnect = false;
     this._reconnectAttempts = 0;
     this._reconnectTimer = null;
     this._pingInterval = null;
-    this._receivedWelcome = false; // true once we've joined a room at least once this session
+    this._reachedServer = false; // got a hub-welcome at least once this session
   }
 
   on(type, fn) {
@@ -2837,19 +2842,35 @@ class NetworkManager {
     }
   }
 
-  // Always tears down any existing socket/timers first — guarantees only
-  // one live WebSocket per NetworkManager even if connect() is called
-  // again while a previous attempt/reconnect-loop is still in flight
-  // (double-clicking Create/Join, retrying after a typo'd address, etc.)
-  connect(url, name, room) {
+  // Idempotent: calling it again for the same server while a socket is
+  // already open/connecting just refreshes our name/id instead of opening a
+  // second connection.
+  connect(url, name, playerId) {
+    this.name = name;
+    this.playerId = playerId || null;
+    const live = this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING);
+    if (live && this.url === url) {
+      if (this.ws.readyState === WebSocket.OPEN) this._send({ t: 'hub-hello', name: this.name, playerId: this.playerId });
+      return;
+    }
     this._teardown();
     this.url = url;
-    this.name = name;
-    this.room = room || '';
     this._shouldReconnect = true;
     this._reconnectAttempts = 0;
-    this._receivedWelcome = false;
+    this._reachedServer = false;
     this._open();
+  }
+
+  joinRoom(room) {
+    this._wantRoom = true;
+    this.room = room || '';
+    this._send({ t: 'hello', name: this.name, room: this.room });
+  }
+
+  leaveRoom() {
+    this._wantRoom = false;
+    this.room = '';
+    this._send({ t: 'leave-room' });
   }
 
   _teardown() {
@@ -2857,10 +2878,9 @@ class NetworkManager {
     clearTimeout(this._reconnectTimer);
     clearInterval(this._pingInterval);
     if (this.ws) {
-      // Listeners were added with addEventListener, so there's no single
-      // handler property to null out here — instead every listener below
-      // checks `this.ws !== socket` and no-ops once superseded, which is
-      // what actually makes an old, closing socket inert.
+      // Listeners use addEventListener, so every one of them checks
+      // `this.ws !== socket` and no-ops once superseded — that is what makes
+      // an old, closing socket inert.
       try { this.ws.close(); } catch { /* already closed */ }
     }
     this.ws = null;
@@ -2872,15 +2892,17 @@ class NetworkManager {
     try {
       socket = new WebSocket(this.url);
     } catch (err) {
-      this._emit('fatal', { message: 'Invalid server address.' });
+      this._emit('fatal', { message: 'That server address is not valid.' });
       return;
     }
     this.ws = socket;
     socket.addEventListener('open', () => {
-      if (this.ws !== socket) return; // superseded by a newer connect()/teardown
+      if (this.ws !== socket) return;
       this.connected = true;
       this._reconnectAttempts = 0;
-      this._send({ t: 'hello', name: this.name, room: this.room });
+      this._send({ t: 'hub-hello', name: this.name, playerId: this.playerId });
+      // After a dropped connection, silently re-enter the room we were in.
+      if (this._wantRoom && this.room) this._send({ t: 'hello', name: this.name, room: this.room });
       clearInterval(this._pingInterval);
       this._pingInterval = setInterval(() => this._send({ t: 'ping', time: Date.now() }), 5000);
       this._emit('open', {});
@@ -2889,14 +2911,13 @@ class NetworkManager {
       if (this.ws !== socket) return;
       let msg;
       try { msg = JSON.parse(ev.data); } catch { return; }
-      if (msg.t === 'welcome') {
-        this.room = msg.room; // remember it so a dropped connection re-joins the same room
-        this._receivedWelcome = true;
-      }
+      if (msg.t === 'hub-welcome') this._reachedServer = true;
+      if (msg.t === 'welcome') { this.room = msg.room; this._wantRoom = true; } // remembered for auto-rejoin after a drop
+      if (msg.t === 'room-error' || msg.t === 'kicked') { this._wantRoom = false; this.room = ''; }
       this._emit(msg.t, msg);
     });
     socket.addEventListener('close', () => {
-      if (this.ws !== socket) return; // an old socket closing after we've already moved on — ignore
+      if (this.ws !== socket) return;
       this.connected = false;
       clearInterval(this._pingInterval);
       this._emit('close', {});
@@ -2906,9 +2927,9 @@ class NetworkManager {
   }
 
   _scheduleReconnect() {
-    if (!this._receivedWelcome && this._reconnectAttempts >= NetworkManager.MAX_PRECONNECT_RETRIES) {
+    if (!this._reachedServer && this._reconnectAttempts >= NetworkManager.MAX_PRECONNECT_RETRIES) {
       this._shouldReconnect = false;
-      this._emit('fatal', { message: 'Could not reach the server. Check the address and that it is running, then try again.' });
+      this._emit('fatal', { message: 'Could not reach the game server. Check the address in Settings.' });
       return;
     }
     clearTimeout(this._reconnectTimer);
@@ -2928,7 +2949,7 @@ class NetworkManager {
   sendDrop(payload) { this._send({ t: 'drop', ...payload }); }
   sendRaw(obj) { this._send(obj); }
 
-  disconnect() { this._teardown(); }
+  disconnect() { this._wantRoom = false; this.room = ''; this._teardown(); }
 }
 
 // A lightweight stand-in for another player's Player instance: visual mesh
@@ -3071,7 +3092,12 @@ class MultiplayerManager {
   constructor(game) {
     this.game = game;
     this.net = new NetworkManager();
-    this.active = false; // true once we've successfully joined a room
+    this.active = false; // true once the match has started (gameplay running)
+    this.inRoom = false; // in a party/lobby or match
+    this.hubId = null;   // our id in the server's online-players list
+    this.online = [];    // everyone currently on the site (from the server)
+    this._friends = [];
+    this._isAccount = false;
     this.localId = null;
     this.remotePlayers = new Map(); // id -> RemotePlayer
     this._sendAccum = 0;
@@ -3088,311 +3114,519 @@ class MultiplayerManager {
     window.addEventListener('beforeunload', () => this.net.disconnect());
   }
 
-  // ---------- Top-level lobby shell ----------
-  _bindLobbyUI() {
-    this.lobbyEl = document.getElementById('mp-lobby');
-    this.errorEl = document.getElementById('mp-error');
-    this.serverInput = document.getElementById('mp-server-input');
-    this.roomInput = document.getElementById('mp-room-input');
+  // ======================================================================
+  // MAIN MENU: login -> menu (Play / Online / Friends / Requests) -> party
+  // ======================================================================
+  _$(id) { return document.getElementById(id); }
 
+  _bindLobbyUI() {
+    this.lobbyEl = this._$('mp-lobby');
     try {
       const saved = JSON.parse(localStorage.getItem('mp-lobby-prefs') || '{}');
-      if (saved.server) this.serverInput.value = saved.server;
-    } catch { /* ignore */ }
+      this._savedServer = saved.server || '';
+    } catch { this._savedServer = ''; }
 
-    document.getElementById('mp-advanced-toggle').addEventListener('click', () => {
-      const el = document.getElementById('mp-advanced-join');
-      el.style.display = el.style.display === 'none' ? 'block' : 'none';
-    });
-    document.getElementById('mp-join-code-btn').addEventListener('click', () => this._attemptConnect((this.roomInput.value || '').trim().toUpperCase()));
-    document.getElementById('mp-solo-btn').addEventListener('click', () => { this.lobbyEl.classList.add('hidden'); });
-    document.getElementById('mp-play-btn').addEventListener('click', () => this._attemptConnect(''));
-
-    document.getElementById('mp-ready-btn').addEventListener('click', () => this._toggleReady());
-    document.getElementById('mp-start-match-btn').addEventListener('click', () => this.net.sendRaw({ t: 'start-match' }));
-    document.getElementById('mp-leave-lobby-btn').addEventListener('click', () => this._leaveLobby());
-    document.getElementById('mp-invite-btn').addEventListener('click', () => this._openInviteModal());
-    document.getElementById('mp-invite-close-btn').addEventListener('click', () => this._closeInviteModal());
-    document.getElementById('mp-invite-join-btn').addEventListener('click', () => this._acceptPendingInvite());
-    document.getElementById('mp-invite-decline-btn').addEventListener('click', () => this._declinePendingInvite());
-
-    this._bindLoginUI();
-  }
-
-  _serverUrl() {
-    const saved = this.serverInput.value.trim();
-    if (saved) return saved;
-    return DEFAULT_SERVER_URL || '';
-  }
-
-  // ---------- Firebase-backed login/profile/friends (account data only) ----------
-  _bindLoginUI() {
-    const loginErrorEl = document.getElementById('mp-login-error');
-    document.getElementById('mp-google-btn').addEventListener('click', async () => {
-      loginErrorEl.textContent = '';
+    // --- login ---
+    this._$('mm-google-btn').addEventListener('click', async () => {
+      this._$('mm-login-error').textContent = '';
       try { await firebaseManager.signInGoogle(); }
-      catch (err) { loginErrorEl.textContent = err?.message || 'Google sign-in failed. Please try again.'; }
+      catch (err) { this._$('mm-login-error').textContent = err?.message || 'Google sign-in failed. Try again.'; }
     });
-    document.getElementById('mp-guest-btn').addEventListener('click', async () => {
-      loginErrorEl.textContent = '';
-      const name = document.getElementById('mp-guest-name-input').value.trim();
-      try { await firebaseManager.signInGuest(name); }
-      catch (err) { loginErrorEl.textContent = err?.message || 'Could not continue as guest. Please try again.'; }
+    this._$('mm-guest-btn').addEventListener('click', () => {
+      firebaseManager.signInGuest(this._$('mm-guest-name').value.trim());
     });
-    document.getElementById('mp-search-btn').addEventListener('click', () => this._sendFriendRequestFromInput());
-    document.getElementById('mp-copy-id-btn').addEventListener('click', () => this._copyMyId());
-    document.getElementById('mp-share-id-btn').addEventListener('click', () => this._shareMyId());
+    this._$('mm-solo-login-btn').addEventListener('click', () => this.lobbyEl.classList.add('hidden'));
 
-    firebaseManager.on('signedIn', (profile) => this._onFirebaseSignedIn(profile));
-    firebaseManager.on('error', ({ message }) => { loginErrorEl.textContent = message; });
+    // --- menu ---
+    this._$('mm-solo-btn').addEventListener('click', () => this.lobbyEl.classList.add('hidden'));
+    this._$('mm-play-btn').addEventListener('click', () => this._startParty());
+    this._$('mm-ready-btn').addEventListener('click', () => this._toggleReady());
+    this._$('mm-start-btn').addEventListener('click', () => this.net.sendRaw({ t: 'start-match' }));
+    this._$('mm-leave-btn').addEventListener('click', () => this._leaveParty());
+    this._$('mm-id-btn').addEventListener('click', () => this._onIdChipClick());
+    this._$('mm-share-btn').addEventListener('click', () => this._shareMyId());
+    this._$('mm-add-btn').addEventListener('click', () => this._addFriendFromInput());
+    this._$('mm-add-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') this._addFriendFromInput(); });
+    document.querySelectorAll('.mm-tab').forEach((tab) => tab.addEventListener('click', () => this._showTab(tab.dataset.tab)));
+
+    // --- settings / help ---
+    this._$('mm-settings-btn').addEventListener('click', () => this._openSettings());
+    this._$('mm-settings-close').addEventListener('click', () => { this._$('mm-settings').style.display = 'none'; });
+    this._$('mm-server-save').addEventListener('click', () => this._saveServer());
+    this._$('mm-fix-btn').addEventListener('click', () => this._openHelp());
+    this._$('mm-help-close').addEventListener('click', () => { this._$('mm-help').style.display = 'none'; });
+    this._$('mm-copy-rules').addEventListener('click', async () => {
+      const ta = this._$('mm-rules-text');
+      try { await navigator.clipboard.writeText(ta.value); this._showToast('Rules copied'); }
+      catch { ta.select(); this._showToast('Select the text and copy it'); }
+    });
+    this._$('mm-help-retry').addEventListener('click', () => this._retryFirebase());
+
+    // --- invites ---
+    this._$('mm-invite-join').addEventListener('click', () => this._acceptInvite());
+    this._$('mm-invite-decline').addEventListener('click', () => this._nextInvite());
+
+    // --- Firebase (accounts / friends only) ---
+    firebaseManager.on('signedIn', (profile) => this._onSignedIn(profile));
+    firebaseManager.on('error', ({ message }) => { this._$('mm-login-error').textContent = message; });
     firebaseManager.on('friendRequests', (requests) => this._renderRequests(requests));
-    firebaseManager.on('invitations', (invites) => this._onInvitations(invites));
-
-    // If a session was already persisted (e.g. a page refresh after Google
-    // sign-in), FirebaseManager's onAuthStateChanged will fire 'signedIn'
-    // shortly after load without any click needed — the login view stays
-    // visible only until then.
+    firebaseManager.on('permissionDenied', () => this._onPermissionDenied());
   }
 
-  _onFirebaseSignedIn(profile) {
-    document.getElementById('mp-login-view').style.display = 'none';
-    document.getElementById('mp-hub-view').style.display = 'block';
+  // ---------- server address ----------
+  _normalizeUrl(u) {
+    u = (u || '').trim();
+    if (!u) return '';
+    if (/^https:\/\//i.test(u)) u = 'wss://' + u.slice(8);
+    else if (/^http:\/\//i.test(u)) u = 'ws://' + u.slice(7);
+    else if (!/^wss?:\/\//i.test(u)) u = 'wss://' + u;
+    return u.replace(/\/+$/, '');
+  }
+  _serverUrl() { return this._normalizeUrl(this._savedServer || DEFAULT_SERVER_URL); }
+  _openSettings() {
+    this._$('mm-server-input').value = this._savedServer || DEFAULT_SERVER_URL || '';
+    this._$('mm-settings').style.display = 'flex';
+  }
+  _saveServer() {
+    const url = this._normalizeUrl(this._$('mm-server-input').value);
+    if (!url) { this._showToast('Enter your server address'); return; }
+    this._savedServer = url;
+    try { localStorage.setItem('mp-lobby-prefs', JSON.stringify({ server: url })); } catch { /* ignore */ }
+    this._$('mm-settings').style.display = 'none';
+    this._connectHub();
+  }
 
-    const summary = document.getElementById('mp-profile-summary');
-    const xp = profile.stats?.xp ?? 0;
-    summary.textContent = `${profile.displayName} — Kills: ${profile.stats?.kills ?? 0}  Deaths: ${profile.stats?.deaths ?? 0}  XP: ${xp}`;
+  // ---------- sign-in -> menu ----------
+  _avatarColor(name) {
+    let h = 0;
+    for (const ch of String(name)) h = (h * 31 + ch.charCodeAt(0)) % 360;
+    return `hsl(${h}, 55%, 42%)`;
+  }
+  _paintAvatar(el, name) {
+    el.textContent = (String(name).trim()[0] || '?').toUpperCase();
+    el.style.background = this._avatarColor(name);
+  }
 
-    const isRealAccount = firebaseManager.user && !firebaseManager.user.isGuest;
-    document.getElementById('mp-id-card').style.display = isRealAccount ? 'block' : 'none';
-    document.getElementById('mp-my-id').textContent = profile.playerId || '(allocating...)';
-    if (isRealAccount) {
-      this._unsubFriends = firebaseManager.listenFriends((friends) => this._renderFriends(friends));
-      this._startPresencePolling();
+  _onSignedIn(profile) {
+    this._$('mm-login').style.display = 'none';
+    this._$('mm-menu').style.display = 'flex';
+    this._isAccount = !!(firebaseManager.user && !firebaseManager.user.isGuest);
+    this._paintAvatar(this._$('mm-avatar'), profile.displayName);
+    this._$('mm-name').textContent = profile.displayName;
+    this._$('mm-xp').textContent = this._isAccount ? `XP ${profile.stats?.xp ?? 0}  \u2022  K/D ${profile.stats?.kills ?? 0}/${profile.stats?.deaths ?? 0}` : 'Guest';
+    this._refreshIdChip();
+
+    if (this._isAccount) {
+      this._subscribeFriends();
     } else {
-      document.getElementById('mp-friends-list').innerHTML = '<li class="mp-entity-empty">Sign in with Google to add friends.</li>';
+      this._$('mm-add-input').disabled = true;
+      this._$('mm-add-btn').disabled = true;
+      this._renderFriends([]);
     }
-
-    // Restore any weapons the account had saved from a previous session.
+    this._renderOnline();
+    this._renderRequests([]);
     for (const weaponId of (profile.inventory || [])) this.game.weaponManager.addWeapon(weaponId);
+    this._connectHub();
   }
 
-  async _copyMyId() {
+  _subscribeFriends() {
+    if (this._unsubFriends) this._unsubFriends();
+    this._unsubFriends = firebaseManager.listenFriends((friends) => this._renderFriends(friends));
+  }
+
+  _refreshIdChip() {
+    const chip = this._$('mm-id-btn'), share = this._$('mm-share-btn');
     const id = firebaseManager.profile?.playerId;
-    if (!id) return;
-    try { await navigator.clipboard.writeText(id); this._showToast('Player ID copied'); }
-    catch { this._showToast(id); }
+    if (!this._isAccount) { chip.style.display = 'none'; share.style.display = 'none'; return; }
+    chip.style.display = 'inline-block';
+    if (id) { chip.textContent = `${id}  \u29C9 copy`; share.style.display = 'inline-block'; }
+    else { chip.textContent = 'GET MY PLAYER ID'; share.style.display = 'none'; }
+  }
+  async _onIdChipClick() {
+    const id = firebaseManager.profile?.playerId;
+    if (!id) {
+      try { await firebaseManager.ensurePlayerId(); this._refreshIdChip(); this._connectHub(); this._showToast('Your Player ID is ready'); }
+      catch (err) { this._showToast(err.message); }
+      return;
+    }
+    try { await navigator.clipboard.writeText(id); this._showToast('Player ID copied: ' + id); }
+    catch { this._showToast('Your Player ID: ' + id); }
   }
   async _shareMyId() {
     const id = firebaseManager.profile?.playerId;
     if (!id) return;
-    const text = `Add me on the game — my Player ID is ${id}`;
-    if (navigator.share) { try { await navigator.share({ text }); return; } catch { /* user cancelled or unsupported — fall through */ } }
-    this._copyMyId();
+    const text = `Add me in the game! My Player ID is ${id}`;
+    if (navigator.share) { try { await navigator.share({ text }); return; } catch { /* cancelled */ } }
+    this._onIdChipClick();
   }
 
-  async _sendFriendRequestFromInput() {
-    const input = document.getElementById('mp-search-input');
-    const errEl = document.getElementById('mp-friend-error');
-    errEl.textContent = '';
+  // ---------- tabs ----------
+  _showTab(name) {
+    document.querySelectorAll('.mm-tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+    for (const n of ['online', 'friends', 'requests']) this._$('mm-tab-' + n).style.display = n === name ? 'block' : 'none';
+  }
+
+  // ---------- hub connection (one socket: online presence + game rooms) ----------
+  _connectHub() {
+    const url = this._serverUrl();
+    if (!url) {
+      this._setPill('bad', 'No server set');
+      this._showToast('Set your game server address first');
+      this._openSettings();
+      return;
+    }
+    this._setPill('', 'Connecting...');
+    const profile = firebaseManager.profile;
+    this.net.connect(url, (profile?.displayName || 'Player').slice(0, 16), profile?.playerId || null);
+    clearTimeout(this._hubTimer);
+    this._hubTimer = setTimeout(() => {
+      if (!this.hubId) {
+        this._setPill('bad', 'No response');
+        this._showToast('Server is not answering. Is it running and up to date (server.js)?');
+      }
+    }, 10000);
+  }
+  _setPill(cls, text) {
+    this._$('mm-server-pill').className = 'mm-pill ' + cls;
+    this._$('mm-server-text').textContent = text;
+  }
+
+  // ---------- Online players ----------
+  _statusText(status) {
+    return { online: 'Online', in_lobby: 'In lobby', in_game: 'In game' }[status] || 'Offline';
+  }
+  _friendByPlayerId(pid) { return pid && (this._friends || []).find((f) => f.playerId === pid); }
+
+  _renderOnline() {
+    const list = this._$('mm-online-list');
+    const others = (this.online || []).filter((p) => p.id !== this.hubId);
+    this._$('mm-online-count').textContent = others.length;
+    list.innerHTML = '';
+    if (!others.length) {
+      list.innerHTML = '<li class="mm-empty">No other players are online right now.<br>Share the link with a friend to play together!</li>';
+      return;
+    }
+    others.sort((a, b) => (!!this._friendByPlayerId(b.playerId) - !!this._friendByPlayerId(a.playerId)) || a.name.localeCompare(b.name));
+    for (const p of others) {
+      const isFriend = !!this._friendByPlayerId(p.playerId);
+      const li = document.createElement('li');
+      const av = document.createElement('div'); av.className = 'mm-avatar'; this._paintAvatar(av, p.name);
+      const main = document.createElement('div'); main.className = 'mm-item-main';
+      main.innerHTML = `<div class="mm-item-name"></div><div class="mm-item-sub"><span class="mm-st ${p.status}"></span><span></span></div>`;
+      main.querySelector('.mm-item-name').textContent = p.name;
+      if (isFriend) { const star = document.createElement('span'); star.className = 'mm-star'; star.textContent = '\u2605'; main.querySelector('.mm-item-name').appendChild(star); }
+      main.querySelectorAll('.mm-item-sub span')[1].textContent = this._statusText(p.status) + (p.playerId ? '  \u2022  ' + p.playerId : '');
+      li.append(av, main);
+      if (this._isAccount && p.playerId && !isFriend) {
+        const add = document.createElement('button'); add.className = 'mm-btn mm-btn-ghost'; add.textContent = '+ FRIEND';
+        add.addEventListener('click', () => this._addFriend(p.playerId));
+        li.appendChild(add);
+      }
+      if (p.status !== 'in_game') {
+        const inv = document.createElement('button'); inv.className = 'mm-btn mm-btn-go'; inv.textContent = 'INVITE';
+        inv.addEventListener('click', () => this._invite(p));
+        li.appendChild(inv);
+      }
+      list.appendChild(li);
+    }
+  }
+
+  // ---------- Friends (saved in Firebase) ----------
+  _renderFriends(friends) {
+    this._friends = friends;
+    this._$('mm-friends-count').textContent = friends.length;
+    const list = this._$('mm-friends-list');
+    list.innerHTML = '';
+    if (!this._isAccount) { list.innerHTML = '<li class="mm-empty">Sign in with Google to save friends.</li>'; return; }
+    if (!friends.length) { list.innerHTML = '<li class="mm-empty">No friends yet.<br>Type a Player ID above, or tap <b>+ FRIEND</b> in the Online tab.</li>'; return; }
+    const onlineByPid = new Map((this.online || []).filter((p) => p.playerId).map((p) => [p.playerId, p]));
+    const rows = friends.map((f) => ({ f, on: onlineByPid.get(f.playerId) }));
+    rows.sort((a, b) => (!!b.on - !!a.on) || a.f.name.localeCompare(b.f.name));
+    for (const { f, on } of rows) {
+      const li = document.createElement('li');
+      const av = document.createElement('div'); av.className = 'mm-avatar'; this._paintAvatar(av, f.name);
+      const main = document.createElement('div'); main.className = 'mm-item-main';
+      main.innerHTML = `<div class="mm-item-name"></div><div class="mm-item-sub"><span class="mm-st ${on ? on.status : ''}"></span><span></span></div>`;
+      main.querySelector('.mm-item-name').textContent = f.name;
+      main.querySelectorAll('.mm-item-sub span')[1].textContent = this._statusText(on?.status) + (f.playerId ? '  \u2022  ' + f.playerId : '');
+      li.append(av, main);
+      if (on && on.status !== 'in_game') {
+        const inv = document.createElement('button'); inv.className = 'mm-btn mm-btn-go'; inv.textContent = 'INVITE';
+        inv.addEventListener('click', () => this._invite(on));
+        li.appendChild(inv);
+      }
+      list.appendChild(li);
+    }
+    this._renderOnline(); // friend stars
+  }
+
+  async _addFriendFromInput() {
+    const input = this._$('mm-add-input');
+    const ok = await this._addFriend(input.value, true);
+    if (ok) input.value = '';
+  }
+  async _addFriend(playerId, fromInput) {
+    const err = this._$('mm-add-error');
+    err.textContent = '';
     try {
-      const result = await firebaseManager.sendFriendRequest(input.value);
-      input.value = '';
-      this._showToast(result.autoAccepted ? `You and ${result.name} are now friends` : `Friend request sent to ${result.name}`);
-    } catch (err) { errEl.textContent = err?.message || 'Could not send that request.'; }
+      const r = await firebaseManager.sendFriendRequest(playerId);
+      this._showToast(r.autoAccepted ? `You and ${r.name} are now friends!` : `Friend request sent to ${r.name}`);
+      return true;
+    } catch (e) {
+      const msg = e?.message || 'Could not add that friend.';
+      if (fromInput) { this._showTab('friends'); err.textContent = msg; } else this._showToast(msg);
+      return false;
+    }
   }
 
   _renderRequests(requests) {
-    this._incomingRequests = requests;
-    const section = document.getElementById('mp-requests-section');
-    const list = document.getElementById('mp-requests-list');
-    section.style.display = requests.length ? 'block' : 'none';
+    const list = this._$('mm-requests-list');
+    const badge = this._$('mm-requests-count');
+    badge.textContent = requests.length;
+    badge.style.display = requests.length ? 'inline-block' : 'none';
     list.innerHTML = '';
+    if (!requests.length) { list.innerHTML = '<li class="mm-empty">No friend requests.</li>'; return; }
     for (const r of requests) {
       const li = document.createElement('li');
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'mp-entity-name';
-      nameSpan.innerHTML = `${r.fromName} <span class="mp-entity-id">${r.fromPlayerId || ''}</span>`;
-      const btnWrap = document.createElement('span');
-      const acceptBtn = document.createElement('button');
-      acceptBtn.textContent = 'ACCEPT';
-      acceptBtn.addEventListener('click', () => firebaseManager.acceptFriendRequest(r.id).catch((err) => this._showToast(err.message)));
-      const declineBtn = document.createElement('button');
-      declineBtn.className = 'secondary';
-      declineBtn.textContent = 'DECLINE';
-      declineBtn.addEventListener('click', () => firebaseManager.declineFriendRequest(r.id).catch((err) => this._showToast(err.message)));
-      btnWrap.append(acceptBtn, declineBtn);
-      li.append(nameSpan, btnWrap);
+      const av = document.createElement('div'); av.className = 'mm-avatar'; this._paintAvatar(av, r.fromName);
+      const main = document.createElement('div'); main.className = 'mm-item-main';
+      main.innerHTML = '<div class="mm-item-name"></div><div class="mm-item-sub"></div>';
+      main.querySelector('.mm-item-name').textContent = r.fromName;
+      main.querySelector('.mm-item-sub').textContent = r.fromPlayerId || '';
+      const yes = document.createElement('button'); yes.className = 'mm-btn mm-btn-go'; yes.textContent = 'ACCEPT';
+      yes.addEventListener('click', () => firebaseManager.acceptFriendRequest(r.id).catch((e) => this._showToast(e.message)));
+      const no = document.createElement('button'); no.className = 'mm-btn mm-btn-ghost'; no.textContent = 'DECLINE';
+      no.addEventListener('click', () => firebaseManager.declineFriendRequest(r.id).catch((e) => this._showToast(e.message)));
+      li.append(av, main, yes, no);
       list.appendChild(li);
     }
   }
 
-  _renderFriends(friends) {
-    this._friendsCache = friends;
-    const list = document.getElementById('mp-friends-list');
-    list.innerHTML = '';
-    if (!friends.length) { list.innerHTML = '<li class="mp-entity-empty">No friends yet — search a Player ID above.</li>'; return; }
-    for (const f of friends) {
-      const li = document.createElement('li');
-      li.dataset.uid = f.uid;
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'mp-entity-name';
-      nameSpan.innerHTML = `<span class="mp-status-dot" data-presence-dot></span>${f.name} <span class="mp-entity-id">${f.playerId || ''}</span>`;
-      const statusSpan = document.createElement('span');
-      statusSpan.className = 'mp-entity-id';
-      statusSpan.setAttribute('data-presence-label', '');
-      statusSpan.textContent = '…';
-      li.append(nameSpan, statusSpan);
-      list.appendChild(li);
-    }
-    this._refreshFriendsPresence();
+  // ---------- "Missing or insufficient permissions" help ----------
+  _onPermissionDenied() {
+    this._$('mm-fix-btn').style.display = 'block';
+    this._$('mm-add-error').textContent = 'Friends are not set up yet. Tap FIX PERMISSIONS.';
+    if (!this._helpShownOnce) { this._helpShownOnce = true; this._openHelp(); }
   }
-
-  // Firestore has no realtime "went offline" signal here (that needs the
-  // Realtime Database's onDisconnect, a different product) — this polls
-  // each friend's presence doc periodically and treats a stale timestamp
-  // as offline even if the status field itself never got updated to
-  // 'offline' (the common case: a mobile tab just dies).
-  _startPresencePolling() {
-    clearInterval(this._presencePollTimer);
-    this._presencePollTimer = setInterval(() => this._refreshFriendsPresence(), 8000);
+  _openHelp() {
+    this._$('mm-rules-text').value = FIRESTORE_RULES_TEXT;
+    this._$('mm-help').style.display = 'flex';
   }
-  async _refreshFriendsPresence() {
-    const list = document.getElementById('mp-friends-list');
-    for (const f of (this._friendsCache || [])) {
-      const presence = await firebaseManager.getPresence(f.uid);
-      const li = list.querySelector(`li[data-uid="${f.uid}"]`);
-      if (!li) continue;
-      const label = this._presenceLabel(presence);
-      const dot = li.querySelector('[data-presence-dot]');
-      const text = li.querySelector('[data-presence-label]');
-      dot.className = 'mp-status-dot ' + label.cls;
-      text.textContent = label.text;
-      let inviteBtn = li.querySelector('button');
-      if (label.cls === 'online' || label.cls === 'in_lobby') {
-        if (!inviteBtn) {
-          inviteBtn = document.createElement('button');
-          inviteBtn.className = 'secondary';
-          inviteBtn.textContent = 'INVITE';
-          inviteBtn.addEventListener('click', () => this._sendInviteToFriend(f));
-          li.appendChild(inviteBtn);
-        }
-      } else if (inviteBtn) { inviteBtn.remove(); }
-    }
-  }
-  _presenceLabel(presence) {
-    if (!presence || !presence.updatedAt) return { cls: '', text: 'Offline' };
-    const stale = Date.now() - presence.updatedAt > 60000;
-    if (stale) return { cls: '', text: 'Offline' };
-    if (presence.status === 'in_game') return { cls: 'in_game', text: 'In Game' };
-    if (presence.status === 'in_lobby') return { cls: 'in_lobby', text: 'In Lobby' };
-    if (presence.status === 'online') return { cls: 'online', text: 'Online' };
-    return { cls: '', text: 'Offline' };
-  }
-
-  // ---------- Invitations ----------
-  async _sendInviteToFriend(friend) {
-    if (!this.roomCode) { this._showToast('Press Play first to create a lobby.'); return; }
+  async _retryFirebase() {
+    this._$('mm-help').style.display = 'none';
+    this._$('mm-add-error').textContent = '';
+    this._showToast('Retrying...');
     try {
-      await firebaseManager.sendInvite(friend.uid, friend.name, this.roomCode);
-      this._showToast(`Invited ${friend.name}`);
+      if (this._isAccount && !firebaseManager.profile?.playerId) { await firebaseManager.ensurePlayerId(); this._refreshIdChip(); this._connectHub(); }
+      if (this._isAccount) { this._subscribeFriends(); firebaseManager._listenIncomingRequests(); }
+      this._$('mm-fix-btn').style.display = 'none';
     } catch (err) { this._showToast(err.message); }
   }
-  _openInviteModal() {
-    const list = document.getElementById('mp-invite-friend-list');
-    list.innerHTML = '';
-    const onlineFriends = (this._friendsCache || []);
-    if (!onlineFriends.length) { list.innerHTML = '<li class="mp-entity-empty">No friends yet.</li>'; }
-    for (const f of onlineFriends) {
-      const li = document.createElement('li');
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'mp-entity-name';
-      nameSpan.textContent = f.name;
-      const btn = document.createElement('button');
-      btn.textContent = 'INVITE';
-      btn.addEventListener('click', () => this._sendInviteToFriend(f));
-      li.append(nameSpan, btn);
-      list.appendChild(li);
-    }
-    document.getElementById('mp-invite-modal').style.display = 'flex';
-  }
-  _closeInviteModal() { document.getElementById('mp-invite-modal').style.display = 'none'; }
 
-  _onInvitations(invites) {
-    if (!invites.length) { document.getElementById('mp-invite-popup').style.display = 'none'; this._pendingInvite = null; return; }
-    // Only ever surface one at a time — oldest first.
-    const invite = invites.slice().sort((a, b) => a.createdAt - b.createdAt)[0];
-    if (this._pendingInvite && this._pendingInvite.id === invite.id) return; // already showing it
-    this._pendingInvite = invite;
-    document.getElementById('mp-invite-popup-text').textContent = `${invite.fromName} invited you to a game.`;
-    document.getElementById('mp-invite-popup').style.display = 'block';
-  }
-  _acceptPendingInvite() {
-    const invite = this._pendingInvite;
-    if (!invite) return;
-    document.getElementById('mp-invite-popup').style.display = 'none';
-    firebaseManager.respondInvitation(invite.id, true).catch(() => {});
-    this.lobbyEl.classList.remove('hidden');
-    this._attemptConnect(invite.roomCode);
-  }
-  _declinePendingInvite() {
-    const invite = this._pendingInvite;
-    if (!invite) return;
-    document.getElementById('mp-invite-popup').style.display = 'none';
-    firebaseManager.respondInvitation(invite.id, false).catch(() => {});
-    this._pendingInvite = null;
-  }
-
-  _attemptConnect(roomCode) {
-    const server = this._serverUrl();
-    const name = (firebaseManager.profile?.displayName || 'Player').slice(0, 16);
-    this.errorEl.textContent = '';
-    if (!server) {
-      this.errorEl.textContent = 'No server configured yet — use "Have a room code?" below to set the server address once.';
+  // ---------- Party (lobby): create, invite, ready, start ----------
+  _startParty() {
+    if (!this.net.connected || !this.hubId) {
+      this._showToast('Connecting to the server...');
+      this._connectHub();
       return;
     }
-    try { localStorage.setItem('mp-lobby-prefs', JSON.stringify({ server })); } catch { /* ignore */ }
-    this._setStatus('connecting', 'Connecting...');
-    // Prevent double-clicks from firing connect() twice — NetworkManager.connect()
-    // is self-cleaning either way, but this also gives clearer button feedback.
-    this._setConnectButtonsEnabled(false);
-    this.net.connect(server, name, roomCode);
+    const btn = this._$('mm-play-btn');
+    btn.disabled = true;
+    clearTimeout(this._playTimer);
+    this._playTimer = setTimeout(() => { btn.disabled = false; }, 6000); // never leave it stuck
+    this.net.joinRoom('');
   }
 
-  _setConnectButtonsEnabled(enabled) {
-    document.getElementById('mp-play-btn').disabled = !enabled;
-    document.getElementById('mp-join-code-btn').disabled = !enabled;
+  _invite(player) {
+    if (!this.net.connected) { this._showToast('Not connected to the server'); return; }
+    if (!this.inRoom) {
+      (this._pendingInvites ||= []).push(player.id);
+      this._showToast('Creating your party...');
+      this._startParty();
+    } else {
+      this.net.sendRaw({ t: 'invite', toId: player.id });
+    }
   }
 
-  _setStatus(cls, text) {
-    const el = document.getElementById('mp-status');
-    el.className = cls;
-    document.getElementById('mp-status-text').textContent = text;
+  _setPartyView(inParty) {
+    this._$('mm-home').style.display = inParty ? 'none' : 'block';
+    this._$('mm-party').style.display = inParty ? 'block' : 'none';
+    this._$('mm-play-btn').disabled = false;
+    clearTimeout(this._playTimer);
+  }
+
+  _toggleReady() {
+    this.myReady = !this.myReady;
+    this._$('mm-ready-btn').textContent = this.myReady ? 'NOT READY' : 'READY';
+    this.net.sendRaw({ t: 'ready', ready: this.myReady });
+  }
+
+  _onLobbyState(msg) {
+    this.isHost = msg.hostId === this.localId;
+    this.lobbyRoster = msg.players;
+    const mine = msg.players.find((p) => p.id === this.localId);
+    if (mine) this.myReady = mine.ready;
+    this._renderParty();
+  }
+
+  _renderParty() {
+    const list = this._$('mm-party-list');
+    const roster = this.lobbyRoster || [];
+    this._$('mm-party-count').textContent = `${roster.length}/8`;
+    list.innerHTML = '';
+    for (const p of roster) {
+      const li = document.createElement('li');
+      const av = document.createElement('div'); av.className = 'mm-avatar'; this._paintAvatar(av, p.name);
+      const main = document.createElement('div'); main.className = 'mm-item-main';
+      const nm = document.createElement('div'); nm.className = 'mm-item-name';
+      nm.textContent = (p.host ? '\uD83D\uDC51 ' : '') + p.name + (p.id === this.localId ? ' (you)' : '');
+      main.appendChild(nm);
+      const tag = document.createElement('span'); tag.className = p.ready ? 'mm-ready' : 'mm-wait'; tag.textContent = p.ready ? 'READY' : 'WAITING';
+      li.append(av, main, tag);
+      if (this.isHost && p.id !== this.localId) {
+        const rm = document.createElement('button'); rm.className = 'mm-btn mm-btn-ghost'; rm.textContent = 'KICK';
+        rm.addEventListener('click', () => this.net.sendRaw({ t: 'kick', targetId: p.id }));
+        li.appendChild(rm);
+      }
+      list.appendChild(li);
+    }
+    this._$('mm-start-btn').style.display = this.isHost ? 'block' : 'none';
+    this._$('mm-ready-btn').textContent = this.myReady ? 'NOT READY' : 'READY';
+    this._$('mm-party-hint').textContent = this.isHost
+      ? 'You are the host. Invite friends from the list, then press START MATCH.'
+      : 'Waiting for the host to start the match.';
+  }
+
+  _resetRoomState() {
+    this.active = false;
+    this.inRoom = false;
+    this.roomCode = null;
+    this.isHost = false;
+    this.myReady = false;
+    this.lobbyRoster = [];
+    for (const id of [...this.remotePlayers.keys()]) this._onPlayerLeft(id);
+    this._setPartyView(false);
+    this.lobbyEl.classList.remove('hidden');
+    this._setStatus('', this.net.connected ? 'Online' : 'Offline');
+  }
+
+  _leaveParty() {
+    this.net.leaveRoom();
+    this._resetRoomState();
+  }
+
+  _onWelcome(msg) {
+    // `this.active` means "the match has actually started" (_onMatchStarted).
+    // A fresh join lands in the party view; the 3D world stays hidden behind
+    // the menu, so seeding bots/remote players this early is harmless. If
+    // the room's match is already running (reconnect mid-game, or joining a
+    // friend after they started) skip straight into gameplay.
+    this.inRoom = true;
+    this.localId = msg.id;
+    this.roomCode = msg.room;
+    this.myReady = false;
+    this.game.player.id = msg.id;
+    this._setStatus('connected', `In match \u2014 ${msg.players.length + 1}/8`);
+
+    const incomingIds = new Set(msg.players.map((p) => p.id));
+    for (const id of [...this.remotePlayers.keys()]) {
+      if (!incomingIds.has(id)) this._onPlayerLeft(id); // drop ghosts left over from before a reconnect
+    }
+    for (const p of msg.players) this._onPlayerJoined(p, /*silent*/ true);
+    this._seedBotState(msg.bots || []);
+    for (const pickupId of (msg.collected || [])) {
+      const pickup = this.game.world.getPickupById(pickupId);
+      if (pickup) { pickup.collected = true; this.game.world.removePickup(pickup); }
+    }
+    this.game.raycastManager.markDirty();
+    this._updatePlayerCountBadge();
+
+    if (msg.phase === 'active') { this._onMatchStarted(); return; }
+    this._setPartyView(true);
+    this.lobbyEl.classList.remove('hidden');
+    // Send any invites that were waiting for the party to exist.
+    for (const toId of (this._pendingInvites || [])) this.net.sendRaw({ t: 'invite', toId });
+    this._pendingInvites = [];
+  }
+
+  _onMatchStarted() {
+    this.active = true;
+    this.lobbyEl.classList.add('hidden');
+    this._$('local-health-wrap').classList.add('active');
+  }
+
+  // ---------- Invitations (live, over the game-server socket) ----------
+  _onInvited(msg) {
+    (this._incomingInvites ||= []).push(msg);
+    if (this._incomingInvites.length === 1) this._showInvite();
+  }
+  _showInvite() {
+    const inv = this._incomingInvites[0];
+    if (!inv) { this._$('mm-invite-popup').style.display = 'none'; return; }
+    this._$('mm-invite-text').textContent = `${inv.fromName} invited you to a game`;
+    this._$('mm-invite-popup').style.display = 'block';
+    clearTimeout(this._inviteTimer);
+    this._inviteTimer = setTimeout(() => this._nextInvite(), 30000); // stale invites expire
+  }
+  _nextInvite() {
+    clearTimeout(this._inviteTimer);
+    this._incomingInvites.shift();
+    this._showInvite();
+  }
+  _acceptInvite() {
+    const inv = this._incomingInvites[0];
+    if (!inv) return;
+    clearTimeout(this._inviteTimer);
+    this._incomingInvites = [];
+    this._$('mm-invite-popup').style.display = 'none';
+    if (this.inRoom) { this.net.leaveRoom(); this._resetRoomState(); }
+    this.lobbyEl.classList.remove('hidden');
+    this._$('mm-login').style.display = 'none';
+    this._$('mm-menu').style.display = 'flex';
+    this.net.joinRoom(inv.roomCode); // code is never shown to the player
   }
 
   // ---------- Network wiring ----------
   _bindNetworkEvents() {
     const n = this.net;
-    n.on('open', () => {});
-    n.on('close', () => { if (this.active) this._setStatus('disconnected', 'Disconnected — reconnecting...'); });
-    n.on('reconnecting', ({ attempt }) => this._setStatus('disconnected', `Reconnecting (attempt ${attempt})...`));
+    n.on('hub-welcome', (msg) => {
+      this.hubId = msg.hubId;
+      clearTimeout(this._hubTimer);
+      this._setPill('ok', 'Online');
+    });
+    n.on('online-list', (msg) => {
+      this.online = msg.players;
+      this._renderOnline();
+      this._renderFriends(this._friends || []); // refresh friend statuses
+    });
+    n.on('close', () => {
+      this.hubId = null;
+      this._setPill('', 'Reconnecting...');
+      if (this.active) this._setStatus('disconnected', 'Disconnected \u2014 reconnecting...');
+    });
+    n.on('reconnecting', ({ attempt }) => {
+      this._setPill('', `Reconnecting (${attempt})...`);
+      if (this.active) this._setStatus('disconnected', `Reconnecting (attempt ${attempt})...`);
+    });
     n.on('fatal', ({ message }) => {
-      this.errorEl.textContent = message;
-      this._setStatus('disconnected', 'Offline');
-      this._setConnectButtonsEnabled(true);
+      this._setPill('bad', 'Offline');
+      this._showToast(message);
+      this._$('mm-play-btn').disabled = false;
     });
     n.on('room-error', ({ message }) => {
-      this.errorEl.textContent = message;
-      this._setStatus('disconnected', 'Offline');
-      this._setConnectButtonsEnabled(true);
-      this.net.disconnect();
+      this._showToast(message);
+      this._resetRoomState();
     });
+    n.on('invited', (msg) => this._onInvited(msg));
+    n.on('invite-sent', (msg) => this._showToast(`Invite sent to ${msg.toName}`));
+    n.on('invite-error', (msg) => this._showToast(msg.message));
+    n.on('kicked', ({ message }) => { this._showToast(message || 'Removed from the party.'); this._resetRoomState(); });
 
     n.on('welcome', (msg) => this._onWelcome(msg));
     n.on('player-joined', (msg) => this._onPlayerJoined(msg.player));
     n.on('player-left', (msg) => this._onPlayerLeft(msg.id));
     n.on('lobby-state', (msg) => this._onLobbyState(msg));
     n.on('match-started', () => this._onMatchStarted());
-    n.on('kicked', ({ message }) => { this.errorEl.textContent = message || 'Removed from the lobby.'; this._leaveLobby(); });
     n.on('state-batch', (msg) => this._onStateBatch(msg.players, msg.bots));
     n.on('attack-result', (msg) => this._onAttackResult(msg));
     n.on('death', (msg) => this._onDeath(msg));
@@ -3404,116 +3638,12 @@ class MultiplayerManager {
     n.on('weapon-dropped', (msg) => this._onWeaponDropped(msg));
   }
 
-  _onWelcome(msg) {
-    // `this.active` specifically means "the match has actually started"
-    // (see _onMatchStarted). A fresh join lands in the Game Lobby
-    // (roster/ready/host) first — the 3D view stays hidden the whole time,
-    // so seeding bots/remote players this early is harmless. But if the
-    // room's match is already running (a reconnect mid-game, or joining a
-    // friend's match directly by code after it started), skip the lobby
-    // screen entirely and drop straight into gameplay, same as before this
-    // feature existed — see onHello's comment in server.js for why the
-    // server allows this rather than rejecting it.
-    this.inRoom = true;
-    this.localId = msg.id;
-    this.roomCode = msg.room;
-    this.myReady = false;
-    this.game.player.id = msg.id;
-    this._setStatus('connected', `Room ${msg.room} — ${msg.players.length + 1}/8`);
-
-    if (msg.phase === 'active') {
-      document.getElementById('mp-hub-view').style.display = 'none';
-      document.getElementById('mp-game-lobby-view').style.display = 'none';
-      this._onMatchStarted();
-    } else {
-      document.getElementById('mp-hub-view').style.display = 'none';
-      document.getElementById('mp-game-lobby-view').style.display = 'block';
-      this.lobbyEl.classList.remove('hidden');
-    }
-
-    // Defensive reconciliation: drop any remote player we're tracking that
-    // the server's fresh player list doesn't include (guards against a
-    // "ghost player" surviving a reconnect if an earlier player-left was
-    // somehow missed).
-    const incomingIds = new Set(msg.players.map((p) => p.id));
-    for (const id of [...this.remotePlayers.keys()]) {
-      if (!incomingIds.has(id)) this._onPlayerLeft(id);
-    }
-
-    for (const p of msg.players) this._onPlayerJoined(p, /*silent*/ true);
-    this._seedBotState(msg.bots || []);
-    for (const pickupId of (msg.collected || [])) {
-      const pickup = this.game.world.getPickupById(pickupId);
-      if (pickup) { pickup.collected = true; this.game.world.removePickup(pickup); }
-    }
-    this.game.raycastManager.markDirty();
-    this._updatePlayerCountBadge();
-    firebaseManager.updatePresence('in_lobby', msg.room);
+  _setStatus(cls, text) {
+    const el = document.getElementById('mp-status');
+    el.className = cls;
+    document.getElementById('mp-status-text').textContent = text;
   }
 
-  // ---------- Game Lobby (roster / ready / host / start) ----------
-  _onLobbyState(msg) {
-    this.isHost = msg.hostId === this.localId;
-    this.lobbyRoster = msg.players; // [{id, name, ready}]
-    const mine = msg.players.find((p) => p.id === this.localId);
-    if (mine) this.myReady = mine.ready;
-    this._renderLobbyRoster();
-  }
-
-  _renderLobbyRoster() {
-    const list = document.getElementById('mp-lobby-roster');
-    list.innerHTML = '';
-    for (const p of (this.lobbyRoster || [])) {
-      const li = document.createElement('li');
-      const nameSpan = document.createElement('span');
-      nameSpan.className = 'mp-entity-name';
-      nameSpan.innerHTML = `${p.host ? '<span class="mp-host-crown">👑</span>' : ''}${p.name}${p.id === this.localId ? ' (you)' : ''}`;
-      const right = document.createElement('span');
-      const statusTag = document.createElement('span');
-      statusTag.className = p.ready ? 'mp-ready-tag' : 'mp-waiting-tag';
-      statusTag.textContent = p.ready ? 'READY' : 'WAITING';
-      right.appendChild(statusTag);
-      if (this.isHost && p.id !== this.localId) {
-        const removeBtn = document.createElement('button');
-        removeBtn.className = 'secondary';
-        removeBtn.textContent = 'REMOVE';
-        removeBtn.style.marginLeft = '6px';
-        removeBtn.addEventListener('click', () => this.net.sendRaw({ t: 'kick', targetId: p.id }));
-        right.appendChild(removeBtn);
-      }
-      li.append(nameSpan, right);
-      list.appendChild(li);
-    }
-    document.getElementById('mp-start-match-btn').style.display = this.isHost ? 'block' : 'none';
-    document.getElementById('mp-ready-btn').textContent = this.myReady ? 'UNREADY' : 'READY';
-  }
-
-  _toggleReady() {
-    this.myReady = !this.myReady;
-    document.getElementById('mp-ready-btn').textContent = this.myReady ? 'UNREADY' : 'READY';
-    this.net.sendRaw({ t: 'ready', ready: this.myReady });
-  }
-
-  _onMatchStarted() {
-    this.active = true;
-    this.lobbyEl.classList.add('hidden');
-    document.getElementById('local-health-wrap').classList.add('active');
-    firebaseManager.updatePresence('in_game', this.roomCode);
-  }
-
-  _leaveLobby() {
-    this.net.disconnect();
-    this.active = false;
-    this.inRoom = false;
-    this.roomCode = null;
-    for (const id of [...this.remotePlayers.keys()]) this._onPlayerLeft(id);
-    document.getElementById('mp-game-lobby-view').style.display = 'none';
-    document.getElementById('mp-hub-view').style.display = 'block';
-    this.lobbyEl.classList.remove('hidden');
-    this._setStatus('', 'Offline');
-    this._setConnectButtonsEnabled(true);
-    firebaseManager.updatePresence('online');
-  }
   // no interpolation here, so a bot that's already mid-patrol doesn't
   // visibly slide in from its spawn point.
   _seedBotState(bots) {
@@ -3585,11 +3715,11 @@ class MultiplayerManager {
   }
 
   _showToast(text) {
-    const el = document.getElementById('pickup-toast');
+    const el = document.getElementById('mm-toast');
     el.textContent = text;
     el.classList.add('show');
     clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => el.classList.remove('show'), 1400);
+    this._toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
   }
 
   _onPlayerLeft(id) {
