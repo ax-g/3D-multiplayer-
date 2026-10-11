@@ -173,7 +173,7 @@ wss.on('connection', (ws) => {
     handleMessage(ws, conn, msg);
   });
 
-  ws.on('close', () => onDisconnect(conn));
+  ws.on('close', () => { removeFromRoom(conn); unregisterHub(conn); });
   ws.on('error', () => {});
 });
 
@@ -188,10 +188,94 @@ setInterval(() => {
   }
 }, 5000);
 
+// ---------------------------------------------------------------------------
+// Hub / "Online Players": every signed-in or guest player keeps this SAME
+// socket open while they're on the site (menu, lobby or match). The server
+// therefore knows exactly who is online right now, with no Firestore reads
+// and no stale-presence guessing — a closed socket is offline instantly.
+// Invitations travel over this socket too, carrying the room code the
+// recipient's client joins automatically (players never see or type it).
+// ---------------------------------------------------------------------------
+/** @type {Map<string, {id:string, name:string, playerId:string|null, ws:any, conn:any}>} */
+const hubs = new Map();
+let hubCounter = 1;
+let onlineBroadcastTimer = null;
+const inviteCooldown = new Map(); // `${fromHub}:${toHub}` -> timestamp
+
+function hubStatus(h) {
+  const room = h.conn.room;
+  if (!room) return 'online';
+  return room.phase === 'active' ? 'in_game' : 'in_lobby';
+}
+
+// Debounced so a burst of joins/leaves/phase changes costs one broadcast.
+function scheduleOnlineBroadcast() {
+  if (onlineBroadcastTimer) return;
+  onlineBroadcastTimer = setTimeout(() => {
+    onlineBroadcastTimer = null;
+    const players = [...hubs.values()].map((h) => ({ id: h.id, name: h.name, playerId: h.playerId, status: hubStatus(h) }));
+    const data = JSON.stringify({ t: 'online-list', players });
+    for (const h of hubs.values()) if (h.ws.readyState === h.ws.OPEN) h.ws.send(data);
+  }, 250);
+}
+
+function onHubHello(ws, conn, msg) {
+  const playerId = typeof msg.playerId === 'string' && /^[a-z0-9_]{1,24}$/.test(msg.playerId) ? msg.playerId : null;
+  if (conn.hub) { // re-announce (name changed / Player ID just allocated) — keep the same hub id
+    conn.hub.name = String(msg.name || conn.hub.name).slice(0, 16);
+    if (playerId) conn.hub.playerId = playerId;
+    return scheduleOnlineBroadcast();
+  }
+  const hub = {
+    id: 'h' + (hubCounter++) + '_' + Math.random().toString(36).slice(2, 6),
+    name: String(msg.name || 'Player').slice(0, 16).trim() || 'Player',
+    playerId, ws, conn,
+  };
+  conn.hub = hub;
+  hubs.set(hub.id, hub);
+  ws.send(JSON.stringify({ t: 'hub-welcome', hubId: hub.id }));
+  scheduleOnlineBroadcast();
+}
+
+function unregisterHub(conn) {
+  if (!conn.hub) return;
+  hubs.delete(conn.hub.id);
+  conn.hub = null;
+  scheduleOnlineBroadcast();
+}
+
+function onInvite(ws, conn, msg) {
+  const from = conn.hub;
+  if (!from) return;
+  const fail = (message) => ws.send(JSON.stringify({ t: 'invite-error', message }));
+  if (!conn.room) return fail('Create a party first.');
+  const target = hubs.get(msg.toId);
+  if (!target || target.ws.readyState !== target.ws.OPEN) return fail('That player just went offline.');
+  if (target.conn.room === conn.room) return fail(`${target.name} is already in your party.`);
+  const key = `${from.id}:${target.id}`;
+  const now = Date.now();
+  if (now - (inviteCooldown.get(key) || 0) < 3000) return; // silently drop spam
+  inviteCooldown.set(key, now);
+  if (inviteCooldown.size > 500) { for (const [k, t] of inviteCooldown) if (now - t > 10000) inviteCooldown.delete(k); }
+  target.ws.send(JSON.stringify({
+    t: 'invited', inviteId: 'i' + now.toString(36) + Math.random().toString(36).slice(2, 5),
+    fromName: from.name, fromPlayerId: from.playerId, roomCode: conn.room.code,
+  }));
+  ws.send(JSON.stringify({ t: 'invite-sent', toName: target.name }));
+}
+
+function onLeaveRoom(ws, conn) {
+  removeFromRoom(conn);
+  if (ws.readyState === ws.OPEN) ws.send(JSON.stringify({ t: 'left-room' }));
+}
+
 function handleMessage(ws, conn, msg) {
   if (!ws._conn) ws._conn = conn;
 
   switch (msg.t) {
+    case 'hub-hello': return onHubHello(ws, conn, msg);
+    case 'invite': return onInvite(ws, conn, msg);
+    case 'leave-room': return onLeaveRoom(ws, conn);
     case 'hello': return onHello(ws, conn, msg);
     case 'ready': return onReady(conn, msg);
     case 'start-match': return onStartMatch(conn);
@@ -236,6 +320,7 @@ function onHello(ws, conn, msg) {
     crouching: false, dashing: false, grounded: true, ready: false,
     lastAttack: new Map(), // weaponKey -> timestamp
     lastStateTime: Date.now(),
+    conn,
   };
   room.players.set(id, player);
   conn.id = id;
@@ -254,6 +339,7 @@ function onHello(ws, conn, msg) {
 
   room.broadcast({ t: 'player-joined', player: room.publicState(player) }, id);
   room.broadcastLobbyState();
+  scheduleOnlineBroadcast();
 }
 
 // Host-only. Ignored once the match has already started (no re-starting
@@ -266,6 +352,7 @@ function onStartMatch(conn) {
   if (!player || !room || player.id !== room.hostId || room.phase !== 'lobby') return;
   room.phase = 'active';
   room.broadcast({ t: 'match-started' });
+  scheduleOnlineBroadcast();
 }
 
 function onReady(conn, msg) {
@@ -283,10 +370,7 @@ function onKick(conn, msg) {
   const target = room.players.get(msg.targetId);
   if (!target || target.id === player.id) return;
   room.send(target.id, { t: 'kicked', message: 'Removed by the host.' });
-  room.players.delete(target.id);
-  try { target.ws.close(); } catch { /* already closing */ }
-  room.broadcast({ t: 'player-left', id: target.id });
-  room.broadcastLobbyState();
+  removeFromRoom(target.conn); // frees their socket to stay online / join elsewhere
 }
 
 function onState(conn, msg) {
@@ -404,19 +488,23 @@ function getPlayer(conn) {
   return conn.room.players.get(conn.id) || null;
 }
 
-function onDisconnect(conn) {
-  if (!conn.id || !conn.room) return;
+// Takes a player out of their room but leaves the socket (and hub
+// registration) alone, so they can immediately create/join another room.
+function removeFromRoom(conn) {
+  if (!conn.id || !conn.room) { conn.id = null; conn.room = null; return; }
   const room = conn.room;
-  if (!room.players.has(conn.id)) return; // already removed (e.g. onKick closed this socket itself)
-  room.players.delete(conn.id);
-  room.broadcast({ t: 'player-left', id: conn.id });
-  if (room.players.size === 0) { rooms.delete(room.code); return; }
-  if (room.hostId === conn.id) {
-    // Host left — promote whoever's been in the room longest (Map
-    // preserves insertion order, so the first remaining entry).
-    room.hostId = room.players.keys().next().value;
+  const id = conn.id;
+  conn.id = null;
+  conn.room = null;
+  if (!room.players.has(id)) return; // already removed
+  room.players.delete(id);
+  room.broadcast({ t: 'player-left', id });
+  if (room.players.size === 0) rooms.delete(room.code);
+  else {
+    if (room.hostId === id) room.hostId = room.players.keys().next().value; // longest-present player
+    room.broadcastLobbyState();
   }
-  room.broadcastLobbyState();
+  scheduleOnlineBroadcast();
 }
 
 // Periodic state broadcast, independent of how often clients send updates.
