@@ -517,6 +517,16 @@ html, body {
   font-family: 'Segoe UI', Arial, sans-serif; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: 90vw; text-align: center;
 }
 #mm-toast.show { opacity: 1; }
+.mm-skin-layout { display: flex; gap: 14px; align-items: center; margin: 8px 0 12px; }
+.mm-skin-stage { flex: 0 0 120px; text-align: center; }
+#mm-skin-box { width: 100px; height: 168px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; }
+#mm-skin-capsule { width: 70px; height: 150px; border-radius: 35px; background: #d8d8de; box-shadow: inset -9px 0 14px rgba(0,0,0,0.25); }
+#mm-skin-img { max-width: 100%; max-height: 100%; }
+#mm-skin-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; }
+.mm-skin-card { width: 88px; padding: 10px 4px 6px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 2px solid transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; }
+.mm-skin-card.sel { border-color: #ffb300; background: rgba(255,179,0,0.12); }
+.mm-skin-card .sw { width: 26px; height: 46px; border-radius: 13px; margin: 0 auto 6px; }
+.mm-skin-card .eq { display: block; color: #33ff77; font-size: 10px; min-height: 12px; }
 #mm-hud-menu-btn {
   position: absolute; top: 44px; left: 12px; z-index: 33; pointer-events: auto; cursor: pointer;
   background: rgba(20,20,20,0.55); color: #fff; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px;
@@ -708,6 +718,7 @@ html, body {
           </div>
           <div id="mm-xp" class="mm-xp"></div>
           <div class="mm-spacer"></div>
+          <button id="mm-skins-btn" class="mm-icon-btn">SKINS</button>
           <button id="mm-share-btn" class="mm-icon-btn" style="display:none;">SHARE ID</button>
           <div id="mm-server-pill" class="mm-pill"><span class="mm-dot"></span><span id="mm-server-text">Connecting...</span></div>
           <button id="mm-settings-btn" class="mm-icon-btn" aria-label="Settings">&#9881;</button>
@@ -765,6 +776,22 @@ html, body {
           <div id="mm-server-ver" class="mm-hint"></div>
           <button id="mm-server-save" class="mm-btn">SAVE &amp; CONNECT</button>
           <button id="mm-settings-close" class="mm-link">Close</button>
+        </div>
+      </div>
+
+      <!-- ============ SKINS ============ -->
+      <div id="mm-skins" class="mm-modal" style="display:none;">
+        <div class="mm-card mm-wide">
+          <h3>Skins</h3>
+          <div class="mm-skin-layout">
+            <div class="mm-skin-stage">
+              <div id="mm-skin-box"><div id="mm-skin-capsule"></div><img id="mm-skin-img" alt="" style="display:none;" /></div>
+              <div id="mm-skin-name" class="mm-item-name"></div>
+            </div>
+            <div id="mm-skin-grid"></div>
+          </div>
+          <button id="mm-skin-equip" class="mm-btn mm-btn-go">EQUIP SKIN</button>
+          <button id="mm-skins-close" class="mm-link">Close</button>
         </div>
       </div>
 
@@ -964,6 +991,15 @@ class FirebaseManager {
   }
 
   _canPersist() { return fbDb && this.user && !this.user.isGuest; }
+
+  // Just the skin ID string; failures are non-fatal (the local copy still works).
+  async saveSkin(id) {
+    if (!this.profile) return;
+    this.profile.skin = id;
+    if (!this._canPersist()) return;
+    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { skin: id }); }
+    catch (err) { console.warn('Could not save skin to profile:', err); }
+  }
 
   // Event-driven, occasional writes only — never per-frame or per-tick.
   async recordKill() {
@@ -1768,6 +1804,11 @@ class Player {
     this.mesh.add(torso, head);
     this.mesh.position.copy(this.position);
     scene.add(this.mesh);
+    // Exposed so SkinSystem can re-skin the existing meshes (nothing else changes).
+    this.bodyMesh = torso;
+    this.headMesh = head;
+    this.defaultMat = bodyMat;
+    this.skinId = 'default';
     this.headHeight = CONFIG.camera.firstPerson.headHeight;
   }
 
@@ -2282,6 +2323,182 @@ class Engine {
     }
   }
 }
+
+// ============================================================================
+// SKINS
+//
+// The player is a capsule torso (CapsuleGeometry 0.28/0.75, 8 radial segments)
+// plus a separate sphere head, so a single "capsule UV" image can't wrap it.
+// Instead a skin = a body colour + two lightweight decal meshes cut from ONE
+// small atlas texture (skins/<id>.png): the sunglasses ring on the head and
+// the tie on the torso. Existing meshes, physics, hit-boxes and rays are not
+// touched — decals are plain children that rays ignore.
+//
+// Only the skin ID ever crosses the network; every client loads the same
+// atlas from the site itself. Unknown IDs and missing/failed textures fall
+// back to the default look.
+// ============================================================================
+const SKIN_CATALOG = {
+  default: { id: 'default', name: 'Classic', bodyColor: 0xd8d8de },
+  blue_thug: {
+    id: 'blue_thug', name: 'Blue Thug', bodyColor: 0x44c6fc,
+    texture: 'skins/blue_thug.png', preview: 'skins/blue_thug_preview.png',
+    atlas: 512, // atlas is 512x512; rects are [x, y, w, h] in pixels
+    glasses: { rect: [0, 0, 512, 42], frontU: 0.417 }, // strip spans 360° around the head; frontU = where "straight ahead" sits
+    tie: { rect: [0, 64, 112, 339] },
+  },
+};
+
+const SkinSystem = {
+  _textures: new Map(), // skinId -> Promise<Texture|null>   (one download per skin, ever)
+  _assets: new Map(),   // skinId -> shared materials + geometries (built once)
+
+  sanitize(id) {
+    return typeof id === 'string' && Object.prototype.hasOwnProperty.call(SKIN_CATALOG, id) ? id : 'default';
+  },
+
+  _loadTexture(skin) {
+    if (!this._textures.has(skin.id)) {
+      this._textures.set(skin.id, new Promise((resolve) => {
+        const url = new URL(skin.texture, document.baseURI).href; // resolves to the GitHub Pages URL
+        new THREE.TextureLoader().load(url, (tex) => {
+          tex.colorSpace = THREE.SRGBColorSpace;
+          tex.generateMipmaps = false;           // small decals: skip mipmaps (less memory, no bleed between atlas regions)
+          tex.minFilter = THREE.LinearFilter;
+          tex.magFilter = THREE.LinearFilter;
+          resolve(tex);
+        }, undefined, () => { console.warn('Skin texture could not be loaded, using default look:', url); resolve(null); });
+      }));
+    }
+    return this._textures.get(skin.id);
+  },
+
+  // Points on the REAL torso surface just in front of the player (+Z), measured
+  // once with a ray per column, so the tie hugs the 8-sided capsule instead of
+  // floating over it or sinking into it whatever the capsule's internals are.
+  _measureTorsoFrontZ(xs) {
+    const geo = new THREE.CapsuleGeometry(0.28, 0.75, 4, 8);
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
+    mesh.updateMatrixWorld(true);
+    const rc = new THREE.Raycaster();
+    const origin = new THREE.Vector3(), dir = new THREE.Vector3(0, 0, -1);
+    const zs = xs.map((x) => {
+      origin.set(x, 0, 1);
+      rc.set(origin, dir);
+      const hit = rc.intersectObject(mesh, false)[0];
+      return hit ? hit.point.z : Math.sqrt(Math.max(0.28 * 0.28 - x * x, 0));
+    });
+    geo.dispose(); mesh.material.dispose();
+    return zs;
+  },
+
+  // Where does SphereGeometry put u=0 (as an angle from +Z toward +X), and which
+  // way does u run? Read from the real geometry, so the glasses land on the face
+  // (and aren't mirrored) even if three.js's convention differs from what I expect.
+  _sphereAzimuth() {
+    const probe = new THREE.SphereGeometry(1, 8, 2);
+    const p = probe.attributes.position, uv = probe.attributes.uv;
+    let a0 = null, a1 = null;
+    for (let i = 0; i < p.count; i++) {
+      if (Math.abs(p.getY(i)) > 1e-4) continue; // equator row only
+      const u = uv.getX(i), az = Math.atan2(p.getX(i), p.getZ(i));
+      if (a0 === null && Math.abs(u) < 1e-6) a0 = az;
+      if (a1 === null && Math.abs(u - 0.125) < 1e-6) a1 = az;
+    }
+    probe.dispose();
+    if (a0 === null || a1 === null) return { a0: -Math.PI / 2, dir: 1 }; // expected values
+    let d = a1 - a0;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return { a0, dir: d >= 0 ? 1 : -1 };
+  },
+
+  _buildAssets(skin, tex) {
+    const A = skin.atlas;
+
+    // --- sunglasses: a thin partial-sphere shell just outside the head sphere (r 0.22).
+    const [gx, gy, gw, gh] = skin.glasses.rect;
+    const { a0, dir } = this._sphereAzimuth();
+    const flip = dir < 0;                                              // u would run right-to-left: mirror the strip back
+    const uFront = flip ? 1 - skin.glasses.frontU : skin.glasses.frontU;
+    const phiStart = -a0 * dir - uFront * Math.PI * 2;                 // puts "straight ahead" of the strip on +Z (= phi 90° with today's three.js)
+    const thetaLen = gh * (Math.PI * 2 / gw);                          // same angular scale vertically as around, so pixels stay square
+    const thetaStart = (86 * Math.PI / 180) - thetaLen / 2;            // centred a touch above the equator
+    const glassesGeo = new THREE.SphereGeometry(0.22 + 0.006, 32, 4, phiStart, Math.PI * 2, thetaStart, thetaLen);
+    const uv = glassesGeo.attributes.uv;
+    for (let i = 0; i < uv.count; i++) {
+      const t = flip ? 1 - uv.getX(i) : uv.getX(i);
+      uv.setXY(i, (gx + t * gw) / A, 1 - (gy + (1 - uv.getY(i)) * gh) / A);
+    }
+
+    // --- tie: a narrow grid whose depth follows the measured torso surface.
+    const [tx, ty, tw, th] = skin.tie.rect;
+    const tieH = 0.62, tieW = tieH * tw / th, cols = 9;
+    const xs = Array.from({ length: cols }, (_, i) => -tieW / 2 + tieW * i / (cols - 1));
+    const zs = this._measureTorsoFrontZ(xs);
+    const pos = [], uvs = [], idx = [];
+    for (let r = 0; r < 2; r++) {
+      for (let c = 0; c < cols; c++) {
+        pos.push(xs[c], r === 0 ? tieH / 2 : -tieH / 2, zs[c] + 0.004);
+        uvs.push((tx + (c / (cols - 1)) * tw) / A, 1 - (ty + r * th) / A);
+      }
+    }
+    for (let c = 0; c < cols - 1; c++) idx.push(c, cols + c, c + 1, c + 1, cols + c, cols + c + 1);
+    const tieGeo = new THREE.BufferGeometry();
+    tieGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    tieGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    tieGeo.setIndex(idx);
+    tieGeo.computeVertexNormals();
+
+    return {
+      glassesGeo, tieGeo,
+      bodyMat: new THREE.MeshStandardMaterial({ color: skin.bodyColor, roughness: 0.45, metalness: 0.1 }),
+      decalMat: new THREE.MeshStandardMaterial({
+        map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, // lets the white lens pixels stay bright
+        roughness: 0.55, metalness: 0.1, transparent: true, depthWrite: false,
+        polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+      }),
+    };
+  },
+
+  _clearDecals(target) {
+    for (const m of target._skinDecals || []) if (m.parent) m.parent.remove(m); // geometry/material are shared: never disposed here
+    target._skinDecals = [];
+  },
+
+  _setBodyMaterial(target, mat) { target.bodyMesh.material = mat; target.headMesh.material = mat; },
+
+  // target = anything with { bodyMesh (torso), headMesh, defaultMat } — the local Player and every RemotePlayer.
+  async apply(target, skinId) {
+    const skin = SKIN_CATALOG[this.sanitize(skinId)];
+    const token = (target._skinToken = (target._skinToken || 0) + 1);
+    target.skinId = skin.id;
+    this._clearDecals(target);
+    if (!skin.texture) { this._setBodyMaterial(target, target.defaultMat); return; }
+
+    let assets = this._assets.get(skin.id);
+    if (!assets) {
+      const tex = await this._loadTexture(skin);
+      if (target._skinToken !== token) return;        // a newer apply() for this player won the race
+      if (!tex) {                                      // missing texture -> safe fallback, and allow a retry later
+        this._textures.delete(skin.id);
+        this._setBodyMaterial(target, target.defaultMat);
+        return;
+      }
+      assets = this._assets.get(skin.id) || this._buildAssets(skin, tex);
+      this._assets.set(skin.id, assets);
+    }
+    this._clearDecals(target);                          // (another apply may have attached during the await)
+    this._setBodyMaterial(target, assets.bodyMat);
+    const glasses = new THREE.Mesh(assets.glassesGeo, assets.decalMat);
+    const tie = new THREE.Mesh(assets.tieGeo, assets.decalMat);
+    tie.position.y = 0.06; // torso-local: tie spans world y≈0.80–1.42, just below the head
+    for (const m of [glasses, tie]) { m.castShadow = false; m.receiveShadow = false; m.raycast = () => {}; m.renderOrder = 2; }
+    target.headMesh.add(glasses);
+    target.bodyMesh.add(tie);
+    target._skinDecals = [glasses, tie];
+  },
+};
 
 // Wraps an angle difference into [-π, π) in constant time regardless of
 // how large the input is. Used instead of the classic "while (diff > PI)
@@ -2850,6 +3067,7 @@ class NetworkManager {
     this.url = null;
     this.name = 'Player';
     this.playerId = null;
+    this.skin = 'default';   // equipped skin ID (server validates it)
     this.room = '';          // room code the server assigned us (kept for auto-rejoin after a drop)
     this._wantRoom = false;  // true while we should be (re)joined to a room
     this._listeners = new Map();
@@ -2897,7 +3115,7 @@ class NetworkManager {
   joinRoom(room) {
     this._wantRoom = true;
     this.room = room || '';
-    this._send({ t: 'hello', name: this.name, room: this.room });
+    this._send({ t: 'hello', name: this.name, room: this.room, skin: this.skin });
   }
 
   leaveRoom() {
@@ -2935,7 +3153,7 @@ class NetworkManager {
       this._reconnectAttempts = 0;
       this._send({ t: 'hub-hello', name: this.name, playerId: this.playerId });
       // After a dropped connection, silently re-enter the room we were in.
-      if (this._wantRoom && this.room) this._send({ t: 'hello', name: this.name, room: this.room });
+      if (this._wantRoom && this.room) this._send({ t: 'hello', name: this.name, room: this.room, skin: this.skin });
       clearInterval(this._pingInterval);
       this._pingInterval = setInterval(() => this._send({ t: 'ping', time: Date.now() }), 5000);
       this._emit('open', {});
@@ -3055,6 +3273,8 @@ class RemotePlayer {
     head.userData.bodyPart = 'head';
     this.headMesh = head;
     this.bodyMesh = torso;
+    this.defaultMat = mat;
+    this.skinId = 'default';
   }
 
   applyServerState(state) {
@@ -3140,6 +3360,13 @@ class MultiplayerManager {
     this._bindLobbyUI();
     this._bindNetworkEvents();
 
+    // Equipped skin: remembered locally (and in the player's profile when signed in).
+    let savedSkin = 'default';
+    try { savedSkin = localStorage.getItem('mp-skin') || 'default'; } catch { /* ignore */ }
+    this.localSkin = SkinSystem.sanitize(savedSkin);
+    this.net.skin = this.localSkin;
+    SkinSystem.apply(this.game.player, this.localSkin);
+
     // Best-effort clean disconnect so other clients don't have to wait on
     // the server's stale-connection timeout to remove us (avoids "ghost
     // players" lingering in the map after a tab close / app background).
@@ -3180,6 +3407,9 @@ class MultiplayerManager {
     this._$('mm-leave-yes').addEventListener('click', () => { this._$('mm-leave-confirm').style.display = 'none'; this._leaveParty(); });
     this._$('mm-leave-btn').addEventListener('click', () => this._leaveParty());
     this._$('mm-id-btn').addEventListener('click', () => this._onIdChipClick());
+    this._$('mm-skins-btn').addEventListener('click', () => this._openSkins());
+    this._$('mm-skins-close').addEventListener('click', () => { this._$('mm-skins').style.display = 'none'; });
+    this._$('mm-skin-equip').addEventListener('click', () => this._equipSelectedSkin());
     this._$('mm-share-btn').addEventListener('click', () => this._shareMyId());
     this._$('mm-add-btn').addEventListener('click', () => this._addFriendFromInput());
     this._$('mm-add-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') this._addFriendFromInput(); });
@@ -3265,6 +3495,11 @@ class MultiplayerManager {
     this._renderOnline();
     this._renderRequests([]);
     for (const weaponId of (profile.inventory || [])) this.game.weaponManager.addWeapon(weaponId);
+    if (this._isAccount) {
+      // The saved profile is the source of truth for accounts; if it has none yet, save what this device uses.
+      if (profile.skin) { if (SkinSystem.sanitize(profile.skin) !== this.localSkin) this._setLocalSkin(profile.skin, false); }
+      else if (this.localSkin !== 'default') firebaseManager.saveSkin(this.localSkin);
+    }
     this._connectHub();
   }
 
@@ -3460,6 +3695,68 @@ class MultiplayerManager {
       if (this._isAccount) { this._subscribeFriends(); firebaseManager._listenIncomingRequests(); }
       this._$('mm-fix-btn').style.display = 'none';
     } catch (err) { this._showToast(err.message); }
+  }
+
+  // ---------- Skins ----------
+  _openSkins() {
+    this._previewSkin = this.localSkin;
+    const grid = this._$('mm-skin-grid');
+    grid.innerHTML = '';
+    for (const skin of Object.values(SKIN_CATALOG)) {
+      const card = document.createElement('button');
+      card.className = 'mm-skin-card';
+      card.dataset.skin = skin.id;
+      card.innerHTML = '<div class="sw"></div><span class="nm"></span><span class="eq"></span>';
+      card.querySelector('.sw').style.background = '#' + skin.bodyColor.toString(16).padStart(6, '0');
+      card.querySelector('.nm').textContent = skin.name;
+      card.addEventListener('click', () => this._selectSkin(skin.id));
+      grid.appendChild(card);
+    }
+    this._selectSkin(this._previewSkin);
+    this._$('mm-skins').style.display = 'flex';
+  }
+
+  _selectSkin(id) {
+    this._previewSkin = SkinSystem.sanitize(id);
+    const skin = SKIN_CATALOG[this._previewSkin];
+    for (const card of this._$('mm-skin-grid').children) {
+      card.classList.toggle('sel', card.dataset.skin === skin.id);
+      card.querySelector('.eq').textContent = card.dataset.skin === this.localSkin ? 'EQUIPPED' : '';
+    }
+    this._$('mm-skin-name').textContent = skin.name;
+    // Preview: the skin's picture if it loads, otherwise a plain coloured capsule.
+    const capsule = this._$('mm-skin-capsule'), img = this._$('mm-skin-img');
+    capsule.style.background = '#' + skin.bodyColor.toString(16).padStart(6, '0');
+    capsule.style.display = 'block';
+    img.style.display = 'none';
+    if (skin.preview) {
+      img.onload = () => { if (this._previewSkin === skin.id) { img.style.display = 'block'; capsule.style.display = 'none'; } };
+      img.onerror = () => { img.style.display = 'none'; capsule.style.display = 'block'; };
+      img.src = new URL(skin.preview, document.baseURI).href;
+    }
+    const btn = this._$('mm-skin-equip');
+    const equipped = skin.id === this.localSkin;
+    btn.disabled = equipped;
+    btn.textContent = equipped ? 'EQUIPPED' : 'EQUIP SKIN';
+  }
+
+  _equipSelectedSkin() {
+    this._setLocalSkin(this._previewSkin, true);
+    this._selectSkin(this._previewSkin);
+    this._showToast(`${SKIN_CATALOG[this.localSkin].name} equipped`);
+  }
+
+  // Applies a skin to our own player, remembers it, tells the room (the server
+  // validates the ID and relays only the ID to everyone), and saves it to the
+  // profile when signed in.
+  _setLocalSkin(id, persist) {
+    id = SkinSystem.sanitize(id);
+    this.localSkin = id;
+    this.net.skin = id;
+    try { localStorage.setItem('mp-skin', id); } catch { /* ignore */ }
+    SkinSystem.apply(this.game.player, id);
+    this.net.sendRaw({ t: 'skin', skin: id }); // ignored by the server unless we're in a room
+    if (persist && this._isAccount) firebaseManager.saveSkin(id);
   }
 
   // ---------- Party (lobby): create, invite, ready, start ----------
@@ -3718,6 +4015,7 @@ class MultiplayerManager {
     n.on('player-joined', (msg) => this._onPlayerJoined(msg.player));
     n.on('player-left', (msg) => this._onPlayerLeft(msg.id));
     n.on('lobby-state', (msg) => this._onLobbyState(msg));
+    n.on('skin-changed', (msg) => { const rp = this.remotePlayers.get(msg.id); if (rp) SkinSystem.apply(rp, msg.skin); });
     n.on('match-started', () => this._onMatchStarted());
     n.on('state-batch', (msg) => this._onStateBatch(msg.players, msg.bots));
     n.on('attack-result', (msg) => this._onAttackResult(msg));
@@ -3801,8 +4099,10 @@ class MultiplayerManager {
   }
 
   _onPlayerJoined(p, silent) {
-    if (this.remotePlayers.has(p.id)) return;
+    const existing = this.remotePlayers.get(p.id);
+    if (existing) { if (p.skin) SkinSystem.apply(existing, p.skin); return; }
     const rp = new RemotePlayer(this.game.gameRenderer.scene, p, this._colorCounter++);
+    SkinSystem.apply(rp, p.skin); // initial player data carries the skin id, so late joiners see everyone's skin
     this.remotePlayers.set(p.id, rp);
     this.game.world.remotePlayers.push(rp);
     this.game.raycastManager.markDirty();
