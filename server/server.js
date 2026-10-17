@@ -19,7 +19,12 @@ const http = require('http');
 
 // Bump when the protocol changes. Shown at the server's web address and sent to
 // clients, so you can tell at a glance whether Render is running the new code.
-const SERVER_VERSION = 'v4-hub';
+const SERVER_VERSION = 'v5-skins';
+// Approved skin IDs — keep in sync with SKIN_CATALOG in index.html. Only these
+// short IDs are ever accepted or relayed; images never travel over the socket.
+const ALLOWED_SKINS = new Set(['default', 'blue_thug']);
+function sanitizeSkin(id) { return typeof id === 'string' && ALLOWED_SKINS.has(id) ? id : 'default'; }
+
 const PORT = process.env.PORT || 8080;
 const MAX_PLAYERS = 8;
 const TICK_HZ = 15;
@@ -103,6 +108,10 @@ class Room {
     const p = this.players.get(id);
     if (p && p.ws.readyState === p.ws.OPEN) p.ws.send(JSON.stringify(msg));
   }
+
+  // Full one-off snapshot (welcome / player-joined): includes the skin, which
+  // is NOT repeated in the 15 Hz state-batch — changes arrive as 'skin-changed'.
+  snapshot(p) { return { ...this.publicState(p), skin: p.skin || 'default' }; }
 
   publicState(p) {
     return {
@@ -281,6 +290,7 @@ function handleMessage(ws, conn, msg) {
     case 'invite': return onInvite(ws, conn, msg);
     case 'leave-room': return onLeaveRoom(ws, conn);
     case 'hello': return onHello(ws, conn, msg);
+    case 'skin': return onSkin(conn, msg);
     case 'ready': return onReady(conn, msg);
     case 'start-match': return onStartMatch(conn);
     case 'kick': return onKick(conn, msg);
@@ -322,6 +332,7 @@ function onHello(ws, conn, msg) {
     x: sx, y: sy, z: sz, yaw: 0,
     health: 100, maxHealth: 100, alive: true, weaponId: null,
     crouching: false, dashing: false, grounded: true, ready: false,
+    skin: sanitizeSkin(msg.skin),
     lastAttack: new Map(), // weaponKey -> timestamp
     lastStateTime: Date.now(),
     conn,
@@ -336,12 +347,12 @@ function onHello(ws, conn, msg) {
     id,
     room: room.code,
     phase: room.phase,
-    players: [...room.players.values()].filter((p) => p.id !== id).map(room.publicState.bind(room)),
+    players: [...room.players.values()].filter((p) => p.id !== id).map(room.snapshot.bind(room)),
     bots: [...room.bots.values()].map(room.publicBotState.bind(room)),
     collected: [...room.collected],
   }));
 
-  room.broadcast({ t: 'player-joined', player: room.publicState(player) }, id);
+  room.broadcast({ t: 'player-joined', player: room.snapshot(player) }, id);
   room.broadcastLobbyState();
   scheduleOnlineBroadcast();
 }
@@ -359,6 +370,15 @@ function onStartMatch(conn) {
   room.phase = 'active';
   room.broadcast({ t: 'match-started' });
   scheduleOnlineBroadcast();
+}
+
+function onSkin(conn, msg) {
+  const player = getPlayer(conn);
+  if (!player || !conn.room) return; // not in a room: nothing to sync (it rides along on the next 'hello')
+  const skin = sanitizeSkin(msg.skin);
+  if (skin === player.skin) return;
+  player.skin = skin;
+  conn.room.broadcast({ t: 'skin-changed', id: player.id, skin });
 }
 
 function onReady(conn, msg) {
