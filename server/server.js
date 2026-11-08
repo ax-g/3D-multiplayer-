@@ -19,10 +19,10 @@ const http = require('http');
 
 // Bump when the protocol changes. Shown at the server's web address and sent to
 // clients, so you can tell at a glance whether Render is running the new code.
-const SERVER_VERSION = 'v5-skins';
+const SERVER_VERSION = 'v6-slide';
 // Approved skin IDs — keep in sync with SKIN_CATALOG in index.html. Only these
 // short IDs are ever accepted or relayed; images never travel over the socket.
-const ALLOWED_SKINS = new Set(['default', 'blue_thug']);
+const ALLOWED_SKINS = new Set(['default', 'blue_thug', 'pirate_sea']);
 function sanitizeSkin(id) { return typeof id === 'string' && ALLOWED_SKINS.has(id) ? id : 'default'; }
 
 const PORT = process.env.PORT || 8080;
@@ -117,7 +117,7 @@ class Room {
     return {
       id: p.id, name: p.name, x: p.x, y: p.y, z: p.z, yaw: p.yaw,
       health: p.health, maxHealth: p.maxHealth, alive: p.alive, weaponId: p.weaponId,
-      crouching: !!p.crouching, dashing: !!p.dashing, grounded: p.grounded !== false,
+      crouching: !!p.crouching, dashing: !!p.dashing, sliding: !!p.sliding, grounded: p.grounded !== false,
     };
   }
 
@@ -426,6 +426,7 @@ function onState(conn, msg) {
   if (typeof msg.weaponId !== 'undefined') player.weaponId = msg.weaponId;
   if (typeof msg.crouching === 'boolean') player.crouching = msg.crouching;
   if (typeof msg.dashing === 'boolean') player.dashing = msg.dashing;
+  if (typeof msg.sliding === 'boolean') player.sliding = msg.sliding;
   if (typeof msg.grounded === 'boolean') player.grounded = msg.grounded;
 }
 
