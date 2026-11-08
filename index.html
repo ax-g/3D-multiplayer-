@@ -517,16 +517,25 @@ html, body {
   font-family: 'Segoe UI', Arial, sans-serif; opacity: 0; pointer-events: none; transition: opacity 0.2s; max-width: 90vw; text-align: center;
 }
 #mm-toast.show { opacity: 1; }
-.mm-skin-layout { display: flex; gap: 14px; align-items: center; margin: 8px 0 12px; }
-.mm-skin-stage { flex: 0 0 120px; text-align: center; }
-#mm-skin-box { width: 100px; height: 168px; margin: 0 auto 6px; display: flex; align-items: center; justify-content: center; }
-#mm-skin-capsule { width: 70px; height: 150px; border-radius: 35px; background: #d8d8de; box-shadow: inset -9px 0 14px rgba(0,0,0,0.25); }
+#mm-store { position: absolute; inset: 0; z-index: 6; background: radial-gradient(ellipse at 30% 10%, #1c2a4a 0%, #0b0f1c 70%); flex-direction: column; }
+.mm-store-head { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: rgba(0,0,0,0.5); border-bottom: 1px solid rgba(255,255,255,0.12); }
+.mm-back { flex: 0 0 auto; min-height: 44px; padding: 0 18px; border: none; border-radius: 10px; background: #ffb300; color: #1a1100; font-size: 15px; font-weight: 800; cursor: pointer; box-shadow: 0 3px 0 rgba(0,0,0,0.35); }
+.mm-store-title { font-weight: 800; letter-spacing: 3px; font-size: 16px; }
+.mm-store-tabs { margin-left: auto; display: flex; gap: 6px; }
+.mm-stab { min-height: 40px; padding: 0 14px; border: none; border-radius: 10px; background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); font-size: 12px; font-weight: 800; letter-spacing: 0.5px; cursor: pointer; }
+.mm-stab.active { background: #fff; color: #111; }
+.mm-store-body { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 10px 12px; }
+.mm-store-stage { flex: 0 0 38%; max-width: 270px; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+#mm-prev-wrap { position: relative; flex: 1; min-height: 110px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+#mm-prev-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #mm-skin-img { max-width: 100%; max-height: 100%; }
-#mm-skin-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 8px; }
-.mm-skin-card { width: 88px; padding: 10px 4px 6px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 2px solid transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; }
-.mm-skin-card.sel { border-color: #ffb300; background: rgba(255,179,0,0.12); }
-.mm-skin-card .sw { width: 26px; height: 46px; border-radius: 13px; margin: 0 auto 6px; }
-.mm-skin-card .eq { display: block; color: #33ff77; font-size: 10px; min-height: 12px; }
+#mm-store-name { text-align: center; font-size: 15px; }
+#mm-store-sub { font-size: 11px; opacity: 0.7; text-align: center; white-space: pre-line; line-height: 1.35; max-height: 62px; overflow-y: auto; }
+#mm-store-grid { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; padding-bottom: 8px; }
+.mm-store-card { width: 96px; padding: 10px 4px 6px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 2px solid transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; }
+.mm-store-card.sel { border-color: #ffb300; background: rgba(255,179,0,0.13); }
+.mm-store-card .sw { width: 30px; height: 50px; border-radius: 15px; margin: 0 auto 6px; }
+.mm-store-card .eq { display: block; color: #33ff77; font-size: 10px; min-height: 12px; }
 #mm-hud-menu-btn {
   position: absolute; top: 44px; left: 12px; z-index: 33; pointer-events: auto; cursor: pointer;
   background: rgba(20,20,20,0.55); color: #fff; border: 2px solid rgba(255,255,255,0.5); border-radius: 8px;
@@ -718,7 +727,7 @@ html, body {
           </div>
           <div id="mm-xp" class="mm-xp"></div>
           <div class="mm-spacer"></div>
-          <button id="mm-skins-btn" class="mm-icon-btn">SKINS</button>
+          <button id="mm-store-btn" class="mm-icon-btn">STORE</button>
           <button id="mm-share-btn" class="mm-icon-btn" style="display:none;">SHARE ID</button>
           <div id="mm-server-pill" class="mm-pill"><span class="mm-dot"></span><span id="mm-server-text">Connecting...</span></div>
           <button id="mm-settings-btn" class="mm-icon-btn" aria-label="Settings">&#9881;</button>
@@ -729,6 +738,7 @@ html, body {
             <div id="mm-home">
               <button id="mm-play-btn" class="mm-btn mm-btn-big">&#9654; PLAY</button>
               <div class="mm-sub">Press Play to start a party, then tap <b>INVITE</b> next to any player.</div>
+              <button id="mm-store-open" class="mm-btn mm-btn-ghost">STORE &mdash; skins &amp; weapons</button>
               <button id="mm-solo-btn" class="mm-btn mm-btn-ghost">Play offline (solo)</button>
             </div>
 
@@ -779,19 +789,24 @@ html, body {
         </div>
       </div>
 
-      <!-- ============ SKINS ============ -->
-      <div id="mm-skins" class="mm-modal" style="display:none;">
-        <div class="mm-card mm-wide">
-          <h3>Skins</h3>
-          <div class="mm-skin-layout">
-            <div class="mm-skin-stage">
-              <div id="mm-skin-box"><div id="mm-skin-capsule"></div><img id="mm-skin-img" alt="" style="display:none;" /></div>
-              <div id="mm-skin-name" class="mm-item-name"></div>
-            </div>
-            <div id="mm-skin-grid"></div>
+      <!-- ============ STORE (full screen; BACK is always at the top) ============ -->
+      <div id="mm-store" style="display:none;">
+        <div class="mm-store-head">
+          <button id="mm-store-back" class="mm-back">&larr; BACK</button>
+          <div class="mm-store-title">STORE</div>
+          <div class="mm-store-tabs">
+            <button class="mm-stab active" data-stab="skins">SKINS</button>
+            <button class="mm-stab" data-stab="weapons">WEAPONS</button>
           </div>
-          <button id="mm-skin-equip" class="mm-btn mm-btn-go">EQUIP SKIN</button>
-          <button id="mm-skins-close" class="mm-link">Close</button>
+        </div>
+        <div class="mm-store-body">
+          <div class="mm-store-stage">
+            <div id="mm-prev-wrap"><img id="mm-skin-img" alt="" style="display:none;" /></div>
+            <div id="mm-store-name" class="mm-item-name"></div>
+            <div id="mm-store-sub"></div>
+            <button id="mm-store-action" class="mm-btn mm-btn-go">EQUIP SKIN</button>
+          </div>
+          <div id="mm-store-grid"></div>
         </div>
       </div>
 
@@ -839,7 +854,8 @@ html, body {
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.js"
+      "three": "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
     }
   }
   </script>
@@ -1208,6 +1224,7 @@ const CONFIG = {
     jumpForce: 6.2, gravity: -18,
     turnSmoothing: 12, maxStepHeight: 0.35, maxSlopeAngle: 45,
     dashSpeed: 11, dashDuration: 0.22, dashCooldown: 1.1, dashIFrames: 0.22,
+    slideSpeed: 9, slideDuration: 0.9, slideCooldown: 1.3, // crouch + dash = slide
     crouchHeight: 1.0, crouchSpeedMultiplier: 0.45, crouchTransitionSpeed: 10,
   },
   camera: {
@@ -1284,7 +1301,9 @@ const SKY_PRESETS = {
 
 const USE_IMAGE_SKYBOX = true;
 const SKYBOX_PATH = 'Skybox/'; // put back.png, bottom.png, front.png, left.png, right.png, top.png here
-const SKYBOX_FACES = ['right.png', 'left.png', 'top.png', 'bottom.png', 'front.png', 'back.png'];
+// Order three.js expects for a cube map: +X, -X, +Y, -Y, +Z, -Z.
+const SKYBOX_FACES = ['right', 'left', 'top', 'bottom', 'front', 'back'];
+const SKYBOX_MAX_SIZE = 1024; // faces are shrunk to this on load: six 4K images would exhaust a phone's GPU memory
 
 class Skybox {
   constructor(scene, radius = 480) {
@@ -1295,22 +1314,60 @@ class Skybox {
     this._buildClouds(radius);
   }
 
-  _buildImageSkybox(scene) {
-    const loader = new THREE.CubeTextureLoader();
-    loader.setPath(SKYBOX_PATH);
-    loader.load(
-      SKYBOX_FACES,
-      (cubeTexture) => {
-        cubeTexture.colorSpace = THREE.SRGBColorSpace;
-        scene.background = cubeTexture;
-        if (this.mesh) { scene.remove(this.mesh); this.mesh = null; }
-      },
-      undefined,
-      () => {
-        console.warn('Skybox images not found at "' + SKYBOX_PATH + '" — using procedural sky instead.');
-        this._buildProceduralSkybox(scene, 480);
+  // Loads <folder>/<face>.<ext> for all six faces. GitHub Pages is case-sensitive
+  // ("Skybox/" is not "skybox/") and ONE missing face fails the whole cube, so
+  // this tries the likely folder spellings and image types, shrinks big images
+  // for phones, and — if nothing works — says exactly what it tried on screen
+  // instead of silently showing the default sky.
+  async _buildImageSkybox(scene) {
+    this._buildProceduralSkybox(scene, 480); // placeholder sky while the images load
+    const folders = [...new Set([SKYBOX_PATH, 'Skybox/', 'skybox/', 'SkyBox/', 'skyboxes/'])];
+    const exts = ['png', 'jpg', 'jpeg', 'webp'];
+    const loadImg = (url) => new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('missing ' + url));
+      img.src = url;
+    });
+    const urlFor = (folder, face, ext) => new URL(`${folder}${face}.${ext}`, document.baseURI).href;
+    const tried = [];
+    let images = null;
+    outer:
+    for (const folder of folders) {
+      for (const ext of exts) {
+        const probe = urlFor(folder, 'front', ext);
+        try { await loadImg(probe); } catch { tried.push(probe); continue; } // cheap check first: is this folder/type right?
+        try { images = await Promise.all(SKYBOX_FACES.map((f) => loadImg(urlFor(folder, f, ext)))); break outer; }
+        catch (err) { this._reportSky(`Skybox: found ${probe} but a face is missing (${String(err.message).split('/').pop()}). Need: ${SKYBOX_FACES.join(', ')} as .${ext}`); return; }
       }
-    );
+    }
+    if (!images) {
+      console.warn('Skybox images not found. Tried:', tried);
+      this._reportSky(`Skybox images not found. Looked for e.g. ${tried[0]} — check the folder name (case-sensitive) and that all 6 files exist: ${SKYBOX_FACES.join(', ')}.`);
+      return; // the procedural sky stays
+    }
+    const size = Math.min(SKYBOX_MAX_SIZE, ...images.map((im) => Math.min(im.naturalWidth, im.naturalHeight)));
+    const faces = images.map((im) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      c.getContext('2d').drawImage(im, 0, 0, size, size);
+      return c;
+    });
+    const cube = new THREE.CubeTexture(faces);
+    cube.colorSpace = THREE.SRGBColorSpace;
+    cube.needsUpdate = true;
+    scene.background = cube;
+    if (this.mesh) { scene.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.mesh = null; }
+  }
+
+  _reportSky(message) {
+    const el = document.createElement('div');
+    el.textContent = message + '  (tap to dismiss)';
+    el.style.cssText = 'position:absolute;left:8px;right:8px;bottom:8px;z-index:140;background:rgba(150,60,0,0.92);color:#fff;font:11px/1.35 monospace;padding:8px 10px;border-radius:8px;word-break:break-word;';
+    el.addEventListener('click', () => el.remove());
+    setTimeout(() => el.remove(), 20000);
+    (document.getElementById('app') || document.body).appendChild(el);
   }
 
   _buildProceduralSkybox(scene, radius) {
@@ -1610,6 +1667,19 @@ class World {
     for (const def of this._staticPickupDefs || []) if (!this.getPickupById(def.id)) this._spawnPickup(def);
   }
 
+  // Shows the real weapon model lying on the ground instead of the placeholder box.
+  _attachWeaponModel(mesh, weaponId) {
+    WeaponModels.instance(weaponId).then((model) => {
+      if (!mesh.parent) return;                       // picked up before the model finished loading
+      model.rotation.z = Math.PI / 2;                 // lie it flat
+      model.scale.setScalar(0.7);
+      const c = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+      model.position.sub(c);                          // centre it on the pickup
+      mesh.add(model);
+      mesh.material.visible = false;                  // hide the placeholder box (the mesh itself stays as the pickup's anchor)
+    }).catch(() => { /* keep the placeholder box */ });
+  }
+
   getPickupById(id) { return this.pickups.find((p) => p.id === id) || null; }
 
   _spawnPickup({ id, type, weaponId, amount, label, position }) {
@@ -1638,6 +1708,7 @@ class World {
     mesh.userData.entityType = 'pickup';
     mesh.userData.pickupRef = pickup;
     this.pickups.push(pickup);
+    if (type === 'weapon' && weaponId) this._attachWeaponModel(mesh, weaponId);
     return pickup;
   }
 
@@ -1763,6 +1834,13 @@ class Player {
     this._dashDir = new THREE.Vector3();
     this._dashAttackWindowTimer = 0; // counts down after a dash finishes; an attack landed inside this window gets doubled
 
+    // Slide state (dash while crouched): a longer, lower slide that loses speed as it goes
+    this.isSliding = false;
+    this._slideTimer = 0;
+    this._slideCooldownTimer = 0;
+    this._slideDir = new THREE.Vector3();
+    this._slideAmount = 0; // 0..1, eased, drives the lean/lowering visuals
+
     // Crouch state
     this.crouchHeld = false;
     this.isCrouching = false;
@@ -1846,7 +1924,21 @@ class Player {
     if (this._dashCooldownTimer > 0) this._dashCooldownTimer -= delta;
     if (this._dashAttackWindowTimer > 0) this._dashAttackWindowTimer -= delta;
 
-    if (this.dashQueued && this.dashReady && this.grounded) {
+    if (this._slideCooldownTimer > 0) this._slideCooldownTimer -= delta;
+
+    // Crouched + dash = SLIDE (takes priority over a normal dash).
+    if (this.dashQueued && this.crouchHeld && this.grounded && !this.isSliding && !this.isDashing
+        && this._slideCooldownTimer <= 0 && this._dashCooldownTimer <= 0) {
+      this.isSliding = true;
+      this._slideTimer = cfg.slideDuration;
+      this._slideCooldownTimer = cfg.slideCooldown;
+      this._dashCooldownTimer = cfg.dashCooldown; // the DASH button shows the cooldown too
+      if (hasInput) this._slideDir.copy(_moveDir);
+      else this._slideDir.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+      this.dashQueued = false;
+    }
+
+    if (this.dashQueued && this.dashReady && this.grounded && !this.isSliding) {
       this.isDashing = true;
       this._dashTimer = cfg.dashDuration;
       this._dashCooldownTimer = cfg.dashCooldown;
@@ -1868,8 +1960,14 @@ class Player {
       }
     }
 
-    // Crouch: can't crouch while dashing; releases automatically on dash.
-    this.isCrouching = this.crouchHeld && !this.isDashing;
+    // The slide ends when it runs out, when you jump out of it, or if you slide off an edge.
+    if (this.isSliding) {
+      this._slideTimer -= delta;
+      if (this._slideTimer <= 0 || this.jumpQueued || !this.grounded) this.isSliding = false;
+    }
+
+    // Crouch: can't crouch while dashing; releases automatically on dash. Sliding keeps you low.
+    this.isCrouching = (this.crouchHeld || this.isSliding) && !this.isDashing;
     this._crouchAmount = THREE.MathUtils.damp(this._crouchAmount, this.isCrouching ? 1 : 0, cfg.crouchTransitionSpeed, delta);
 
     const targetSpeed = (running ? cfg.runSpeed : cfg.walkSpeed) * (this.isCrouching ? cfg.crouchSpeedMultiplier : 1);
@@ -1879,6 +1977,12 @@ class Player {
       // Dash overrides normal accel/decel with a snappy burst velocity.
       this.velocity.x = this._dashDir.x * cfg.dashSpeed;
       this.velocity.z = this._dashDir.z * cfg.dashSpeed;
+    } else if (this.isSliding) {
+      // Slide: fast start, friction bleeds the speed off over the slide's duration.
+      const k = THREE.MathUtils.clamp(this._slideTimer / cfg.slideDuration, 0, 1);
+      const speed = cfg.slideSpeed * (0.15 + 0.85 * k * k);
+      this.velocity.x = this._slideDir.x * speed;
+      this.velocity.z = this._slideDir.z * speed;
     } else {
       const control = this.grounded ? 1 : cfg.airControl;
       const rate = (hasInput ? cfg.acceleration : cfg.deceleration) * control;
@@ -1932,12 +2036,13 @@ class Player {
     this.mesh.rotation.y = this.yaw;
 
     // Crouch visual: squash the body mesh and drop eye height, smoothly.
-    const crouchScale = 1 - this._crouchAmount * 0.35;
+    this._slideAmount = THREE.MathUtils.damp(this._slideAmount, this.isSliding ? 1 : 0, 12, delta);
+    const crouchScale = 1 - this._crouchAmount * 0.35 - this._slideAmount * 0.12;
     this.mesh.scale.y = crouchScale;
-    this.currentEyeHeight = this.headHeight - this._crouchAmount * (this.headHeight - CONFIG.player.crouchHeight);
+    this.currentEyeHeight = Math.max(0.5, this.headHeight - this._crouchAmount * (this.headHeight - CONFIG.player.crouchHeight) - this._slideAmount * 0.25);
 
-    // Quick forward tilt while dashing/rolling, eased back to upright when done.
-    const targetTilt = this.isDashing ? 0.5 : 0;
+    // Quick forward tilt while dashing/rolling; lean back while sliding; eased upright when done.
+    const targetTilt = this.isDashing ? 0.5 : (this.isSliding ? -1.0 : 0);
     this.mesh.rotation.x = THREE.MathUtils.damp(this.mesh.rotation.x, targetTilt, 14, delta);
   }
 
@@ -2329,23 +2434,40 @@ class Engine {
 //
 // The player is a capsule torso (CapsuleGeometry 0.28/0.75, 8 radial segments)
 // plus a separate sphere head, so a single "capsule UV" image can't wrap it.
-// Instead a skin = a body colour + two lightweight decal meshes cut from ONE
-// small atlas texture (skins/<id>.png): the sunglasses ring on the head and
-// the tie on the torso. Existing meshes, physics, hit-boxes and rays are not
-// touched — decals are plain children that rays ignore.
+// Instead a skin = a body colour + a few lightweight decal meshes ("parts")
+// cut from ONE small atlas texture (skins/<id>.png). Existing meshes, physics,
+// hit-boxes and rays are not touched — decals are plain children that rays
+// ignore.
+//
+// Part types (all positions are in the head's / torso's own local space):
+//   headRing   thin sphere shell all the way round the head      (sunglasses)
+//   headPatch  small sphere patch on the face                    (eyes)
+//   tie        narrow strip following the torso's front surface  (necktie)
+//   torsoWrap  shell wrapped 360° round the torso, over the shoulders (coat)
 //
 // Only the skin ID ever crosses the network; every client loads the same
 // atlas from the site itself. Unknown IDs and missing/failed textures fall
 // back to the default look.
 // ============================================================================
 const SKIN_CATALOG = {
-  default: { id: 'default', name: 'Classic', bodyColor: 0xd8d8de },
+  default: { id: 'default', name: 'Classic', bodyColor: 0xd8d8de, blurb: 'The standard capsule.' },
   blue_thug: {
-    id: 'blue_thug', name: 'Blue Thug', bodyColor: 0x44c6fc,
+    id: 'blue_thug', name: 'Blue Thug', bodyColor: 0x44c6fc, blurb: 'Light-blue body, thug sunglasses and a black tie.',
     texture: 'skins/blue_thug.png', preview: 'skins/blue_thug_preview.png',
-    atlas: 512, // atlas is 512x512; rects are [x, y, w, h] in pixels
-    glasses: { rect: [0, 0, 512, 42], frontU: 0.417 }, // strip spans 360° around the head; frontU = where "straight ahead" sits
-    tie: { rect: [0, 64, 112, 339] },
+    atlas: 512, // atlases are 512x512; rects are [x, y, w, h] in pixels
+    parts: [
+      { type: 'headRing', rect: [0, 0, 512, 42], frontU: 0.417, polarDeg: 86 },
+      { type: 'tie', rect: [0, 64, 112, 339] },
+    ],
+  },
+  pirate_sea: {
+    id: 'pirate_sea', name: 'Pirate of the Sea', bodyColor: 0x3ec8ff, blurb: 'Smiling blue captain in a black coat with gold trim.',
+    texture: 'skins/pirate_sea.png', preview: 'skins/pirate_sea_preview.png',
+    atlas: 512,
+    parts: [
+      { type: 'headPatch', rect: [0, 296, 128, 34], azHalfDeg: 45, polarFromDeg: 64, polarToDeg: 88 },
+      { type: 'torsoWrap', rect: [0, 0, 512, 288], frontU: 0.5, yTop: 0.58, yBottom: -0.37 },
+    ],
   },
 };
 
@@ -2373,28 +2495,37 @@ const SkinSystem = {
     return this._textures.get(skin.id);
   },
 
-  // Points on the REAL torso surface just in front of the player (+Z), measured
-  // once with a ray per column, so the tie hugs the 8-sided capsule instead of
-  // floating over it or sinking into it whatever the capsule's internals are.
-  _measureTorsoFrontZ(xs) {
+  // The torso's real surface, probed with rays — so decals hug the 8-sided
+  // capsule instead of floating over it or sinking into it, whatever the
+  // capsule's internals are. `y` is torso-local; returns the radius at azimuth
+  // `az` (radians from +Z toward +X), or null if the ray missed.
+  _torsoProbe() {
     const geo = new THREE.CapsuleGeometry(0.28, 0.75, 4, 8);
     const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial());
     mesh.updateMatrixWorld(true);
     const rc = new THREE.Raycaster();
-    const origin = new THREE.Vector3(), dir = new THREE.Vector3(0, 0, -1);
-    const zs = xs.map((x) => {
-      origin.set(x, 0, 1);
-      rc.set(origin, dir);
-      const hit = rc.intersectObject(mesh, false)[0];
-      return hit ? hit.point.z : Math.sqrt(Math.max(0.28 * 0.28 - x * x, 0));
-    });
-    geo.dispose(); mesh.material.dispose();
-    return zs;
+    const origin = new THREE.Vector3(), dir = new THREE.Vector3();
+    return {
+      radiusAt(az, y) {
+        origin.set(Math.sin(az), y, Math.cos(az));
+        dir.set(-Math.sin(az), 0, -Math.cos(az));
+        rc.set(origin, dir);
+        const hit = rc.intersectObject(mesh, false)[0];
+        return hit ? Math.hypot(hit.point.x, hit.point.z) : null;
+      },
+      frontZ(x) { // surface depth straight ahead (+Z) at lateral offset x, mid-torso
+        origin.set(x, 0, 1); dir.set(0, 0, -1);
+        rc.set(origin, dir);
+        const hit = rc.intersectObject(mesh, false)[0];
+        return hit ? hit.point.z : Math.sqrt(Math.max(0.28 * 0.28 - x * x, 0));
+      },
+      dispose() { geo.dispose(); mesh.material.dispose(); },
+    };
   },
 
   // Where does SphereGeometry put u=0 (as an angle from +Z toward +X), and which
-  // way does u run? Read from the real geometry, so the glasses land on the face
-  // (and aren't mirrored) even if three.js's convention differs from what I expect.
+  // way does u run? Read from the real geometry, so the face decals land on the
+  // face (and aren't mirrored) even if three.js's convention differs from mine.
   _sphereAzimuth() {
     const probe = new THREE.SphereGeometry(1, 8, 2);
     const p = probe.attributes.position, uv = probe.attributes.uv;
@@ -2413,48 +2544,115 @@ const SkinSystem = {
     return { a0, dir: d >= 0 ? 1 : -1 };
   },
 
-  _buildAssets(skin, tex) {
-    const A = skin.atlas;
-
-    // --- sunglasses: a thin partial-sphere shell just outside the head sphere (r 0.22).
-    const [gx, gy, gw, gh] = skin.glasses.rect;
-    const { a0, dir } = this._sphereAzimuth();
-    const flip = dir < 0;                                              // u would run right-to-left: mirror the strip back
-    const uFront = flip ? 1 - skin.glasses.frontU : skin.glasses.frontU;
-    const phiStart = -a0 * dir - uFront * Math.PI * 2;                 // puts "straight ahead" of the strip on +Z (= phi 90° with today's three.js)
-    const thetaLen = gh * (Math.PI * 2 / gw);                          // same angular scale vertically as around, so pixels stay square
-    const thetaStart = (86 * Math.PI / 180) - thetaLen / 2;            // centred a touch above the equator
-    const glassesGeo = new THREE.SphereGeometry(0.22 + 0.006, 32, 4, phiStart, Math.PI * 2, thetaStart, thetaLen);
-    const uv = glassesGeo.attributes.uv;
+  // ---- part builders: each returns { geo, host: 'head'|'torso', y } ----
+  _remapSphereUV(geo, rect, A, flip) {
+    const [rx, ry, rw, rh] = rect;
+    const uv = geo.attributes.uv;
     for (let i = 0; i < uv.count; i++) {
       const t = flip ? 1 - uv.getX(i) : uv.getX(i);
-      uv.setXY(i, (gx + t * gw) / A, 1 - (gy + (1 - uv.getY(i)) * gh) / A);
+      uv.setXY(i, (rx + t * rw) / A, 1 - (ry + (1 - uv.getY(i)) * rh) / A);
     }
+  },
 
-    // --- tie: a narrow grid whose depth follows the measured torso surface.
-    const [tx, ty, tw, th] = skin.tie.rect;
+  _headRing(part, A) {
+    const [, , gw, gh] = part.rect;
+    const { a0, dir } = this._sphereAzimuth();
+    const flip = dir < 0;
+    const uFront = flip ? 1 - part.frontU : part.frontU;
+    const phiStart = -a0 * dir - uFront * Math.PI * 2;                // "straight ahead" of the strip -> +Z
+    const thetaLen = gh * (Math.PI * 2 / gw);                          // same angular scale vertically as around, so pixels stay square
+    const thetaStart = (part.polarDeg * Math.PI / 180) - thetaLen / 2;
+    const geo = new THREE.SphereGeometry(0.22 + 0.006, 32, 4, phiStart, Math.PI * 2, thetaStart, thetaLen);
+    this._remapSphereUV(geo, part.rect, A, flip);
+    return { geo, host: 'head', y: 0 };
+  },
+
+  _headPatch(part, A) {
+    const { a0, dir } = this._sphereAzimuth();
+    const half = part.azHalfDeg * Math.PI / 180;
+    const phiOf = (az) => (az - a0) * dir;                             // inverse of az = a0 + dir*phi
+    const flip = dir < 0;
+    const phiStart = flip ? phiOf(half) : phiOf(-half);
+    const thetaStart = part.polarFromDeg * Math.PI / 180;
+    const thetaLen = (part.polarToDeg - part.polarFromDeg) * Math.PI / 180;
+    const geo = new THREE.SphereGeometry(0.22 + 0.006, 16, 4, phiStart, half * 2, thetaStart, thetaLen);
+    this._remapSphereUV(geo, part.rect, A, flip);
+    return { geo, host: 'head', y: 0 };
+  },
+
+  _tie(part, A, probe) {
+    const [tx, ty, tw, th] = part.rect;
     const tieH = 0.62, tieW = tieH * tw / th, cols = 9;
     const xs = Array.from({ length: cols }, (_, i) => -tieW / 2 + tieW * i / (cols - 1));
-    const zs = this._measureTorsoFrontZ(xs);
     const pos = [], uvs = [], idx = [];
     for (let r = 0; r < 2; r++) {
       for (let c = 0; c < cols; c++) {
-        pos.push(xs[c], r === 0 ? tieH / 2 : -tieH / 2, zs[c] + 0.004);
+        pos.push(xs[c], r === 0 ? tieH / 2 : -tieH / 2, probe.frontZ(xs[c]) + 0.004);
         uvs.push((tx + (c / (cols - 1)) * tw) / A, 1 - (ty + r * th) / A);
       }
     }
     for (let c = 0; c < cols - 1; c++) idx.push(c, cols + c, c + 1, c + 1, cols + c, cols + c + 1);
-    const tieGeo = new THREE.BufferGeometry();
-    tieGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    tieGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-    tieGeo.setIndex(idx);
-    tieGeo.computeVertexNormals();
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return { geo, host: 'torso', y: 0.06 }; // tie spans world y≈0.80–1.42, just below the head
+  },
 
+  _torsoWrap(part, A, probe) {
+    const [rx, ry, rw, rh] = part.rect;
+    const N = 48; // 7.5° steps: lands on the octagon's corners whichever way it is rotated
+    // Rows follow the capsule: straight down the cylinder, then curving in over the shoulder dome.
+    const ys = [...new Set([part.yTop, 0.52, 0.46, 0.41, 0.375, 0.0, part.yBottom])].filter((y) => y <= part.yTop && y >= part.yBottom).sort((a, b) => b - a);
+    const pos = [], uvs = [], idx = [];
+    for (let r = 0; r < ys.length; r++) {
+      const y = ys[r];
+      const v = (part.yTop - y) / (part.yTop - part.yBottom);
+      const fallback = Math.sqrt(Math.max(0.28 * 0.28 - Math.pow(Math.max(y - 0.375, 0), 2), 0));
+      const radii = [];
+      for (let k = 0; k < N; k++) {
+        const az = (k / N - part.frontU) * Math.PI * 2;                 // az 0 (straight ahead) sits at u = frontU
+        radii.push(probe.radiusAt(az, y) ?? fallback);
+      }
+      radii.push(radii[0]);                                            // closing column (same surface as column 0)
+      for (let k = 0; k <= N; k++) {
+        const az = (k / N - part.frontU) * Math.PI * 2;
+        const rad = radii[k] + 0.006;
+        pos.push(rad * Math.sin(az), y, rad * Math.cos(az));
+        uvs.push((rx + (k / N) * rw) / A, 1 - (ry + v * rh) / A);
+      }
+    }
+    for (let r = 0; r < ys.length - 1; r++) {
+      for (let k = 0; k < N; k++) {
+        const a = r * (N + 1) + k, b = a + 1, c = (r + 1) * (N + 1) + k, d = c + 1;
+        idx.push(a, c, b, b, c, d);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(idx);
+    geo.computeVertexNormals();
+    return { geo, host: 'torso', y: 0 };
+  },
+
+  _buildAssets(skin, tex) {
+    const A = skin.atlas;
+    const probe = this._torsoProbe();
+    const parts = skin.parts.map((p) => {
+      if (p.type === 'headRing') return this._headRing(p, A);
+      if (p.type === 'headPatch') return this._headPatch(p, A);
+      if (p.type === 'tie') return this._tie(p, A, probe);
+      if (p.type === 'torsoWrap') return this._torsoWrap(p, A, probe);
+      return null;
+    }).filter(Boolean);
+    probe.dispose();
     return {
-      glassesGeo, tieGeo,
+      parts,
       bodyMat: new THREE.MeshStandardMaterial({ color: skin.bodyColor, roughness: 0.45, metalness: 0.1 }),
       decalMat: new THREE.MeshStandardMaterial({
-        map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, // lets the white lens pixels stay bright
+        map: tex, emissiveMap: tex, emissive: 0xffffff, emissiveIntensity: 0.25, // lets white/gold pixels stay bright
         roughness: 0.55, metalness: 0.1, transparent: true, depthWrite: false,
         polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
       }),
@@ -2468,7 +2666,7 @@ const SkinSystem = {
 
   _setBodyMaterial(target, mat) { target.bodyMesh.material = mat; target.headMesh.material = mat; },
 
-  // target = anything with { bodyMesh (torso), headMesh, defaultMat } — the local Player and every RemotePlayer.
+  // target = anything with { bodyMesh (torso), headMesh, defaultMat } — the local Player, every RemotePlayer, the store preview.
   async apply(target, skinId) {
     const skin = SKIN_CATALOG[this.sanitize(skinId)];
     const token = (target._skinToken = (target._skinToken || 0) + 1);
@@ -2490,15 +2688,297 @@ const SkinSystem = {
     }
     this._clearDecals(target);                          // (another apply may have attached during the await)
     this._setBodyMaterial(target, assets.bodyMat);
-    const glasses = new THREE.Mesh(assets.glassesGeo, assets.decalMat);
-    const tie = new THREE.Mesh(assets.tieGeo, assets.decalMat);
-    tie.position.y = 0.06; // torso-local: tie spans world y≈0.80–1.42, just below the head
-    for (const m of [glasses, tie]) { m.castShadow = false; m.receiveShadow = false; m.raycast = () => {}; m.renderOrder = 2; }
-    target.headMesh.add(glasses);
-    target.bodyMesh.add(tie);
-    target._skinDecals = [glasses, tie];
+    target._skinDecals = [];
+    for (const part of assets.parts) {
+      const m = new THREE.Mesh(part.geo, assets.decalMat);
+      m.position.y = part.y;
+      m.castShadow = false; m.receiveShadow = false; m.raycast = () => {}; m.renderOrder = 2;
+      (part.host === 'head' ? target.headMesh : target.bodyMesh).add(m);
+      target._skinDecals.push(m);
+    }
   },
 };
+
+// ============================================================================
+// WEAPON MODELS
+//
+// Put your .glb files in a `models/` folder next to index.html. For each
+// weapon the first file that loads is used (so `exe.glb` also works for the
+// axe). Anything missing — or if the GLB loader can't be reached — falls back
+// to a simple built-in shape, so you always see what is in your hand.
+//
+// Models are auto-oriented (long axis -> up, heavy end up, thin side
+// sideways), scaled to `length` metres and gripped at their base. If one comes
+// out wrong, adjust its `length` here (or re-export it pointing up).
+// Compressed (Draco / meshopt) GLBs are not supported — export uncompressed.
+// ============================================================================
+const WEAPON_MODELS = {
+  sword:  { files: ['models/minecraft_sword.glb', 'models/sword.glb'], length: 0.95 },
+  axe:    { files: ['models/axe.glb', 'models/exe.glb'],               length: 0.85 },
+  hammer: { files: ['models/hammer.glb'],                              length: 0.90 },
+  spear:  { files: ['models/spear.glb'],                               length: 1.70 },
+  dagger: { files: ['models/dagger.glb'],                              length: 0.45 },
+};
+
+const WeaponModels = {
+  _loader: null,
+  _templates: new Map(), // weaponId -> Promise<Group>  (each model downloads once, clones share geometry/materials)
+  _status: new Map(),    // weaponId -> 'custom' | 'default'
+
+  // Loaded lazily and optionally: if the CDN is unreachable the game still runs, with built-in shapes.
+  _getLoader() {
+    if (!this._loader) {
+      this._loader = import('three/addons/loaders/GLTFLoader.js')
+        .then((m) => new m.GLTFLoader())
+        .catch((err) => { console.warn('GLTFLoader unavailable — using built-in weapon shapes.', err); return null; });
+    }
+    return this._loader;
+  },
+
+  status(id) { return this._status.get(id) || 'loading'; },
+  template(id) {
+    if (!this._templates.has(id)) this._templates.set(id, this._build(id));
+    return this._templates.get(id);
+  },
+  async instance(id) { return (await this.template(id)).clone(true); },
+
+  async _build(id) {
+    const cfg = WEAPON_MODELS[id];
+    if (cfg) {
+      const loader = await this._getLoader();
+      if (loader) {
+        for (const file of cfg.files) {
+          try {
+            const gltf = await loader.loadAsync(new URL(file, document.baseURI).href);
+            const model = this._normalize(gltf.scene, cfg.length);
+            this._status.set(id, 'custom');
+            return model;
+          } catch { /* not there / unreadable: try the next name, then fall back */ }
+        }
+      }
+    }
+    this._status.set(id, 'default');
+    return this._procedural(id);
+  },
+
+  // ---- auto-orientation via principal axes of the vertices ----
+  _normalize(root, targetLength) {
+    root.updateMatrixWorld(true);
+    const pts = [], v = new THREE.Vector3();
+    root.traverse((o) => {
+      if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
+      o.castShadow = false; o.receiveShadow = false;
+      const p = o.geometry.attributes.position;
+      const step = Math.max(1, Math.floor(p.count / 800));
+      for (let i = 0; i < p.count; i += step) pts.push(v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).clone());
+    });
+    if (pts.length < 4) throw new Error('empty model');
+
+    const c = new THREE.Vector3();
+    for (const p of pts) c.add(p);
+    c.divideScalar(pts.length);
+
+    let xx = 0, xy = 0, xz = 0, yy = 0, yz = 0, zz = 0;
+    for (const p of pts) {
+      const x = p.x - c.x, y = p.y - c.y, z = p.z - c.z;
+      xx += x * x; xy += x * y; xz += x * z; yy += y * y; yz += y * z; zz += z * z;
+    }
+    const M = [[xx, xy, xz], [xy, yy, yz], [xz, yz, zz]];
+    const mul = (m, a) => [m[0][0] * a[0] + m[0][1] * a[1] + m[0][2] * a[2], m[1][0] * a[0] + m[1][1] * a[1] + m[1][2] * a[2], m[2][0] * a[0] + m[2][1] * a[1] + m[2][2] * a[2]];
+    const nrm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const power = (m, seed) => { let a = nrm(seed); for (let i = 0; i < 40; i++) a = nrm(mul(m, a)); return a; };
+    const e1 = power(M, [1, 0.37, 0.21]);                       // long axis
+    const l1 = dot(e1, mul(M, e1));
+    const M2 = M.map((row, i) => row.map((val, j) => val - l1 * e1[i] * e1[j]));
+    let e2 = power(M2, [0.2, 1, 0.43]);
+    const d12 = dot(e2, e1);
+    e2 = nrm([e2[0] - d12 * e1[0], e2[1] - d12 * e1[1], e2[2] - d12 * e1[2]]);
+    let e3 = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]; // thin axis
+
+    // Heavy end (blade / axe head / hammer head) should point up: the centroid sits nearer the heavy end.
+    let smin = Infinity, smax = -Infinity;
+    for (const p of pts) { const s = (p.x - c.x) * e1[0] + (p.y - c.y) * e1[1] + (p.z - c.z) * e1[2]; smin = Math.min(smin, s); smax = Math.max(smax, s); }
+    if ((smin + smax) / 2 > 0) e1[0] = -e1[0], e1[1] = -e1[1], e1[2] = -e1[2];
+
+    const ex = new THREE.Vector3(...e3), ey = new THREE.Vector3(...e1);
+    const ez = new THREE.Vector3().crossVectors(ex, ey);
+    const rot = new THREE.Matrix4().set(ex.x, ex.y, ex.z, 0, ey.x, ey.y, ey.z, 0, ez.x, ez.y, ez.z, 0, 0, 0, 0, 1);
+
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    for (const p of pts) {
+      const q = p.clone().applyMatrix4(rot);
+      minX = Math.min(minX, q.x); maxX = Math.max(maxX, q.x);
+      minY = Math.min(minY, q.y); maxY = Math.max(maxY, q.y);
+      minZ = Math.min(minZ, q.z); maxZ = Math.max(maxZ, q.z);
+    }
+    const length = Math.max(maxY - minY, 1e-4);
+    const s = targetLength / length;
+
+    const holder = new THREE.Group();
+    holder.add(root);
+    holder.quaternion.setFromRotationMatrix(rot);
+    holder.scale.setScalar(s);
+    holder.position.set(-s * (minX + maxX) / 2, -s * minY, -s * (minZ + maxZ) / 2); // grip = bottom centre at the origin
+    const out = new THREE.Group();
+    out.add(holder);
+    return out;
+  },
+
+  // ---- built-in fallback shapes (all pointing up, gripped at the origin) ----
+  _procedural(id) {
+    const metal = new THREE.MeshStandardMaterial({ color: 0xcfd3d8, roughness: 0.35, metalness: 0.8 });
+    const wood = new THREE.MeshStandardMaterial({ color: 0x6b4a2a, roughness: 0.8 });
+    const dark = new THREE.MeshStandardMaterial({ color: 0x3a3a40, roughness: 0.5, metalness: 0.5 });
+    const g = new THREE.Group();
+    const box = (w, h, d, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); m.position.set(x, y, z); g.add(m); };
+    const cyl = (r, h, mat, x, y, z) => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 8), mat); m.position.set(x, y, z); g.add(m); };
+    switch (id) {
+      case 'sword':  cyl(0.022, 0.2, wood, 0, 0.1, 0); box(0.24, 0.035, 0.055, dark, 0, 0.215, 0); box(0.075, 0.66, 0.016, metal, 0, 0.56, 0); break;
+      case 'dagger': cyl(0.018, 0.12, wood, 0, 0.06, 0); box(0.13, 0.026, 0.045, dark, 0, 0.13, 0); box(0.05, 0.3, 0.012, metal, 0, 0.29, 0); break;
+      case 'axe':    cyl(0.025, 0.85, wood, 0, 0.425, 0); box(0.04, 0.24, 0.28, metal, 0, 0.72, 0.12); break;
+      case 'hammer': cyl(0.026, 0.88, wood, 0, 0.44, 0); box(0.36, 0.17, 0.17, dark, 0, 0.9, 0); break;
+      case 'spear': {
+        cyl(0.02, 1.55, wood, 0, 0.78, 0);
+        const tip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.24, 8), metal); tip.position.set(0, 1.67, 0); g.add(tip);
+        break;
+      }
+      default: box(0.06, 0.6, 0.06, new THREE.MeshStandardMaterial({ color: WEAPON_DATABASE[id]?.color ?? 0xaaaaaa }), 0, 0.3, 0);
+    }
+    g.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+    return g;
+  },
+};
+
+// One character's held weapon: a holder at the hand + the current model + a swing animation.
+class HeldWeapon {
+  constructor(parent, { position, baseRotX, swing, scale = 1 }) {
+    this.holder = new THREE.Group();
+    this.holder.position.set(...position);
+    this.holder.rotation.x = baseRotX;
+    this.holder.scale.setScalar(scale);
+    parent.add(this.holder);
+    this.base = baseRotX;
+    this.swingAmount = swing;
+    this._t = 1;             // 0..1 while swinging, 1 = idle
+    this._token = 0;
+    this.model = null;
+    this.weaponId = null;
+  }
+  async setWeapon(id) {
+    const token = ++this._token;
+    this.weaponId = id || null;
+    if (this.model) { this.holder.remove(this.model); this.model = null; }
+    if (!id) return;
+    const model = await WeaponModels.instance(id);
+    if (token !== this._token) return; // weapon changed while loading
+    this.model = model;
+    this.holder.add(model);
+  }
+  swing() { if (this.model) this._t = 0; }
+  update(delta) {
+    if (this._t < 1) {
+      this._t = Math.min(1, this._t + delta / 0.32);
+      this.holder.rotation.x = this.base + Math.sin(this._t * Math.PI) * this.swingAmount;
+    } else this.holder.rotation.x = this.base;
+  }
+}
+
+// The local player's weapon: one copy on the body (third person) and one on the
+// camera (first person, where the body is hidden). Driven by the existing bus events.
+class LocalWeaponView {
+  constructor(player, camera, scene, bus) {
+    this.player = player;
+    this.third = new HeldWeapon(player.mesh, { position: [-0.36, 0.95, 0.12], baseRotX: 0.9, swing: 1.5 }); // character's right hand (-X when facing +Z)
+    if (!camera.parent) scene.add(camera); // children of the camera only render if the camera is in the scene
+    this.first = new HeldWeapon(camera, { position: [0.3, -0.3, -0.55], baseRotX: -0.35, swing: -1.4, scale: 0.75 });
+    bus.on('weapon-equipped', ({ weapon }) => {
+      const id = weapon ? weapon.id : null;
+      this.third.setWeapon(id);
+      this.first.setWeapon(id);
+    });
+    bus.on('attack-swing', () => { this.third.swing(); this.first.swing(); });
+  }
+  update(delta) {
+    this.third.update(delta);
+    this.first.holder.visible = !this.player.mesh.visible; // body hidden = first person
+    this.first.update(delta);
+  }
+}
+
+// A tiny separate WebGL view used only by the Store, created when it opens and
+// destroyed when it closes (so no extra GPU memory is held during play).
+// Shares geometries/materials with the game; each renderer uploads its own copy.
+class ModelPreview {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ok = false;
+    this._raf = 0; this._last = 0; this._t = 0; this._w = 0; this._h = 0;
+    this.mode = 'spin';
+    try {
+      this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      this.renderer.setClearColor(0x000000, 0);
+      this.scene = new THREE.Scene();
+      this.scene.add(new THREE.HemisphereLight(0xffffff, 0x4a5a70, 1.2));
+      const key = new THREE.DirectionalLight(0xffffff, 1.6);
+      key.position.set(2, 3, 4);
+      this.scene.add(key);
+      this.camera = new THREE.PerspectiveCamera(32, 1, 0.05, 60);
+      this.pivot = new THREE.Group();
+      this.scene.add(this.pivot);
+      this.ok = true;
+    } catch (err) { console.warn('3D preview unavailable on this device:', err); }
+  }
+
+  setSubject(object, mode) {
+    this.pivot.clear();
+    this.pivot.rotation.set(0, 0, 0);
+    this.mode = mode || 'spin';
+    const holder = new THREE.Group();
+    holder.add(object);
+    this.pivot.add(holder);
+    this.pivot.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(holder);
+    const center = box.getCenter(new THREE.Vector3());
+    holder.position.sub(center);                                  // spin around the middle of the thing
+    const radius = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.05);
+    const dist = radius / Math.sin(THREE.MathUtils.degToRad(this.camera.fov / 2)) * 1.08;
+    this.camera.position.set(0, radius * 0.12, dist);
+    this.camera.near = dist / 50; this.camera.far = dist * 6;
+    this.camera.updateProjectionMatrix();
+    this.camera.lookAt(0, 0, 0);
+  }
+
+  _resize() {
+    const w = this.canvas.clientWidth, h = this.canvas.clientHeight;
+    if (!w || !h || (w === this._w && h === this._h)) return;
+    this._w = w; this._h = h;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    this.renderer.setSize(w, h, false);
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+  }
+
+  start() {
+    if (this._raf || !this.ok) return;
+    const tick = (now) => {
+      this._raf = requestAnimationFrame(tick);
+      const dt = Math.min((now - (this._last || now)) / 1000, 0.1);
+      this._last = now;
+      this._t += dt;
+      this._resize();
+      if (this.mode === 'sway') this.pivot.rotation.y = Math.sin(this._t * 0.9) * 0.8; // mostly face-on, so the front of a skin is easy to see
+      else this.pivot.rotation.y += dt * 1.2;
+      this.renderer.render(this.scene, this.camera);
+    };
+    this._raf = requestAnimationFrame(tick);
+  }
+  stop() { cancelAnimationFrame(this._raf); this._raf = 0; this._last = 0; }
+  dispose() {
+    this.stop();
+    try { this.renderer.dispose(); this.renderer.forceContextLoss(); } catch { /* nothing to free */ }
+  }
+}
 
 // Wraps an angle difference into [-π, π) in constant time regardless of
 // how large the input is. Used instead of the classic "while (diff > PI)
@@ -3261,6 +3741,7 @@ class RemotePlayer {
     // a squash/stretch cue so the states read clearly at a glance too.
     this.crouching = false;
     this.dashing = false;
+    this.sliding = false;
     this.grounded = true;
     this._scale = new THREE.Vector3(1, 1, 1);
     this._targetScale = new THREE.Vector3(1, 1, 1);
@@ -3275,14 +3756,16 @@ class RemotePlayer {
     this.bodyMesh = torso;
     this.defaultMat = mat;
     this.skinId = 'default';
+    this.heldWeapon = new HeldWeapon(this.mesh, { position: [-0.36, 0.95, 0.12], baseRotX: 0.9, swing: 1.5 });
   }
 
   applyServerState(state) {
     this._targetPos.set(state.x, state.y, state.z);
     this._targetYaw = state.yaw;
-    if (typeof state.weaponId !== 'undefined') this.weaponId = state.weaponId;
+    if (typeof state.weaponId !== 'undefined' && state.weaponId !== this.weaponId) { this.weaponId = state.weaponId; this.heldWeapon.setWeapon(state.weaponId); }
     if (typeof state.crouching === 'boolean') this.crouching = state.crouching;
     if (typeof state.dashing === 'boolean') this.dashing = state.dashing;
+    if (typeof state.sliding === 'boolean') this.sliding = state.sliding;
     if (typeof state.grounded === 'boolean') this.grounded = state.grounded;
     this._lastUpdateTime = performance.now();
   }
@@ -3313,6 +3796,7 @@ class RemotePlayer {
   // window (~150ms) smooths over the gap between the ~15Hz network updates
   // without visibly lagging behind on a healthy connection.
   tick(delta) {
+    this.heldWeapon.update(delta);
     if (!this.alive) return;
     const lerpRate = 12;
     this.position.x = THREE.MathUtils.damp(this.position.x, this._targetPos.x, lerpRate, delta);
@@ -3326,7 +3810,8 @@ class RemotePlayer {
 
     // Squash for crouch, stretch for dash, small hop pop when airborne —
     // purely cosmetic, driven by the movement flags in the last state update.
-    if (this.crouching) this._targetScale.set(1.1, 0.62, 1.1);
+    if (this.sliding) this._targetScale.set(1.1, 0.5, 1.1);
+    else if (this.crouching) this._targetScale.set(1.1, 0.62, 1.1);
     else if (this.dashing) this._targetScale.set(0.9, 0.95, 1.25);
     else if (!this.grounded) this._targetScale.set(0.95, 1.08, 0.95);
     else this._targetScale.set(1, 1, 1);
@@ -3334,6 +3819,8 @@ class RemotePlayer {
     this._scale.y = THREE.MathUtils.damp(this._scale.y, this._targetScale.y, 10, delta);
     this._scale.z = THREE.MathUtils.damp(this._scale.z, this._targetScale.z, 10, delta);
     this.mesh.scale.copy(this._scale);
+    // Lean back while sliding (remote players), forward tilt while dashing, upright otherwise.
+    this.mesh.rotation.x = THREE.MathUtils.damp(this.mesh.rotation.x, this.sliding ? -1.0 : (this.dashing ? 0.5 : 0), 14, delta);
   }
 
   dispose(scene) {
@@ -3407,9 +3894,11 @@ class MultiplayerManager {
     this._$('mm-leave-yes').addEventListener('click', () => { this._$('mm-leave-confirm').style.display = 'none'; this._leaveParty(); });
     this._$('mm-leave-btn').addEventListener('click', () => this._leaveParty());
     this._$('mm-id-btn').addEventListener('click', () => this._onIdChipClick());
-    this._$('mm-skins-btn').addEventListener('click', () => this._openSkins());
-    this._$('mm-skins-close').addEventListener('click', () => { this._$('mm-skins').style.display = 'none'; });
-    this._$('mm-skin-equip').addEventListener('click', () => this._equipSelectedSkin());
+    this._$('mm-store-btn').addEventListener('click', () => this._openStore());
+    this._$('mm-store-open').addEventListener('click', () => this._openStore());
+    this._$('mm-store-back').addEventListener('click', () => this._closeStore());
+    this._$('mm-store-action').addEventListener('click', () => this._equipSelectedSkin());
+    document.querySelectorAll('.mm-stab').forEach((b) => b.addEventListener('click', () => { this._storeTab = b.dataset.stab; this._renderStore(); }));
     this._$('mm-share-btn').addEventListener('click', () => this._shareMyId());
     this._$('mm-add-btn').addEventListener('click', () => this._addFriendFromInput());
     this._$('mm-add-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') this._addFriendFromInput(); });
@@ -3697,52 +4186,131 @@ class MultiplayerManager {
     } catch (err) { this._showToast(err.message); }
   }
 
-  // ---------- Skins ----------
-  _openSkins() {
-    this._previewSkin = this.localSkin;
-    const grid = this._$('mm-skin-grid');
-    grid.innerHTML = '';
-    for (const skin of Object.values(SKIN_CATALOG)) {
-      const card = document.createElement('button');
-      card.className = 'mm-skin-card';
-      card.dataset.skin = skin.id;
-      card.innerHTML = '<div class="sw"></div><span class="nm"></span><span class="eq"></span>';
-      card.querySelector('.sw').style.background = '#' + skin.bodyColor.toString(16).padStart(6, '0');
-      card.querySelector('.nm').textContent = skin.name;
-      card.addEventListener('click', () => this._selectSkin(skin.id));
-      grid.appendChild(card);
-    }
-    this._selectSkin(this._previewSkin);
-    this._$('mm-skins').style.display = 'flex';
+  // ---------- Store: skins + weapon models ----------
+  _openStore(tab) {
+    this._storeTab = tab || this._storeTab || 'skins';
+    this._$('mm-store').style.display = 'flex';
+    this._renderStore();
+  }
+  _closeStore() {
+    this._$('mm-store').style.display = 'none';
+    this._disposePreview();
   }
 
-  _selectSkin(id) {
-    this._previewSkin = SkinSystem.sanitize(id);
-    const skin = SKIN_CATALOG[this._previewSkin];
-    for (const card of this._$('mm-skin-grid').children) {
-      card.classList.toggle('sel', card.dataset.skin === skin.id);
-      card.querySelector('.eq').textContent = card.dataset.skin === this.localSkin ? 'EQUIPPED' : '';
+  _renderStore() {
+    document.querySelectorAll('.mm-stab').forEach((b) => b.classList.toggle('active', b.dataset.stab === this._storeTab));
+    const grid = this._$('mm-store-grid');
+    grid.innerHTML = '';
+    const items = this._storeTab === 'skins'
+      ? Object.values(SKIN_CATALOG).map((s) => ({ id: s.id, name: s.name, color: s.bodyColor }))
+      : Object.values(WEAPON_DATABASE).map((w) => ({ id: w.id, name: w.name, color: w.color }));
+    for (const it of items) {
+      const card = document.createElement('button');
+      card.className = 'mm-store-card';
+      card.dataset.id = it.id;
+      card.innerHTML = '<div class="sw"></div><span class="nm"></span><span class="eq"></span>';
+      card.querySelector('.sw').style.background = '#' + it.color.toString(16).padStart(6, '0');
+      card.querySelector('.nm').textContent = it.name;
+      card.addEventListener('click', () => this._selectStoreItem(it.id));
+      grid.appendChild(card);
     }
-    this._$('mm-skin-name').textContent = skin.name;
-    // Preview: the skin's picture if it loads, otherwise a plain coloured capsule.
-    const capsule = this._$('mm-skin-capsule'), img = this._$('mm-skin-img');
-    capsule.style.background = '#' + skin.bodyColor.toString(16).padStart(6, '0');
-    capsule.style.display = 'block';
-    img.style.display = 'none';
-    if (skin.preview) {
-      img.onload = () => { if (this._previewSkin === skin.id) { img.style.display = 'block'; capsule.style.display = 'none'; } };
-      img.onerror = () => { img.style.display = 'none'; capsule.style.display = 'block'; };
-      img.src = new URL(skin.preview, document.baseURI).href;
+    this._selectStoreItem(this._storeTab === 'skins' ? this.localSkin : items[0].id);
+  }
+
+  _selectStoreItem(id) {
+    const token = (this._storeToken = (this._storeToken || 0) + 1);
+    const isSkins = this._storeTab === 'skins';
+    for (const card of this._$('mm-store-grid').children) {
+      card.classList.toggle('sel', card.dataset.id === id);
+      card.querySelector('.eq').textContent = isSkins && card.dataset.id === this.localSkin ? 'EQUIPPED' : '';
     }
-    const btn = this._$('mm-skin-equip');
-    const equipped = skin.id === this.localSkin;
-    btn.disabled = equipped;
-    btn.textContent = equipped ? 'EQUIPPED' : 'EQUIP SKIN';
+    const name = this._$('mm-store-name'), sub = this._$('mm-store-sub'), action = this._$('mm-store-action');
+
+    if (isSkins) {
+      this._previewSkin = SkinSystem.sanitize(id);
+      const skin = SKIN_CATALOG[this._previewSkin];
+      name.textContent = skin.name;
+      sub.textContent = skin.blurb || '';
+      action.style.display = 'block';
+      const equipped = skin.id === this.localSkin;
+      action.disabled = equipped;
+      action.textContent = equipped ? 'EQUIPPED' : 'EQUIP SKIN';
+      if (this._showPreview(this._skinDummy().group, 'sway')) SkinSystem.apply(this._dummy.target, skin.id);
+      else this._previewFallback(skin.preview);
+    } else {
+      const w = WEAPON_DATABASE[id];
+      name.textContent = w.name;
+      action.style.display = 'none'; // weapons are found in matches; nothing to equip here
+      const stats = `Damage ${w.damage}  \u2022  Range ${w.range}  \u2022  ${w.attackRate} ms between hits`;
+      sub.textContent = stats + '\nFound in matches \u2014 walk over it and pick it up.';
+      WeaponModels.instance(id).then((model) => {
+        if (token !== this._storeToken) return;
+        const tilt = new THREE.Group();
+        tilt.add(model);
+        tilt.rotation.z = -0.5;
+        this._showPreview(tilt, 'spin');
+        const cfg = WEAPON_MODELS[id];
+        const st = WeaponModels.status(id);
+        sub.textContent = stats + '\n' + (st === 'custom' ? 'Using your 3D model.' : `Using a built-in shape. Add models/${cfg ? cfg.files[0].split('/').pop() : id + '.glb'} to use your own model.`);
+      });
+    }
+  }
+
+  // The preview is a small separate WebGL view created only while the store is open.
+  // If the device can't make one, the store still works with a picture instead.
+  _ensurePreview() {
+    if (this._preview) return this._preview;
+    const canvas = document.createElement('canvas');
+    canvas.id = 'mm-prev-canvas';
+    this._$('mm-prev-wrap').prepend(canvas);
+    const p = new ModelPreview(canvas);
+    if (!p.ok) { p.dispose(); canvas.remove(); this._previewBroken = true; return null; }
+    this._preview = p;
+    return p;
+  }
+  _showPreview(object3d, mode) {
+    if (this._previewBroken) return false;
+    const p = this._ensurePreview();
+    if (!p) return false;
+    this._$('mm-skin-img').style.display = 'none';
+    p.setSubject(object3d, mode);
+    p.start();
+    return true;
+  }
+  _previewFallback(url) {
+    const img = this._$('mm-skin-img');
+    if (!url) { img.style.display = 'none'; return; }
+    img.onload = () => { img.style.display = 'block'; };
+    img.onerror = () => { img.style.display = 'none'; };
+    img.src = new URL(url, document.baseURI).href;
+  }
+  _disposePreview() {
+    if (this._preview) { this._preview.dispose(); this._preview = null; }
+    const c = document.getElementById('mm-prev-canvas');
+    if (c) c.remove();
+    if (this._dummy) { this._dummy.dispose(); this._dummy = null; }
+  }
+
+  // A stand-in character with the same parts as the real player, so the skin preview is exactly what you'll look like.
+  _skinDummy() {
+    if (this._dummy) return this._dummy;
+    const mat = new THREE.MeshStandardMaterial({ color: 0xd8d8de, roughness: 0.5, metalness: 0.15 });
+    const tg = new THREE.CapsuleGeometry(0.28, 0.75, 4, 8), hg = new THREE.SphereGeometry(0.22, 16, 16);
+    const torso = new THREE.Mesh(tg, mat); torso.position.y = 1.05;
+    const head = new THREE.Mesh(hg, mat); head.position.y = 1.62;
+    const group = new THREE.Group();
+    group.add(torso, head);
+    this._dummy = {
+      group,
+      target: { bodyMesh: torso, headMesh: head, defaultMat: mat },
+      dispose() { SkinSystem._clearDecals(this.target); tg.dispose(); hg.dispose(); mat.dispose(); },
+    };
+    return this._dummy;
   }
 
   _equipSelectedSkin() {
     this._setLocalSkin(this._previewSkin, true);
-    this._selectSkin(this._previewSkin);
+    this._selectStoreItem(this._previewSkin);
     this._showToast(`${SKIN_CATALOG[this.localSkin].name} equipped`);
   }
 
@@ -4103,6 +4671,7 @@ class MultiplayerManager {
     if (existing) { if (p.skin) SkinSystem.apply(existing, p.skin); return; }
     const rp = new RemotePlayer(this.game.gameRenderer.scene, p, this._colorCounter++);
     SkinSystem.apply(rp, p.skin); // initial player data carries the skin id, so late joiners see everyone's skin
+    if (p.weaponId) { rp.weaponId = p.weaponId; rp.heldWeapon.setWeapon(p.weaponId); }
     this.remotePlayers.set(p.id, rp);
     this.game.world.remotePlayers.push(rp);
     this.game.raycastManager.markDirty();
@@ -4138,6 +4707,8 @@ class MultiplayerManager {
   }
 
   _onAttackResult({ attackerId, targetId, damage, targetHealth, headshot }) {
+    const attacker = this.remotePlayers.get(attackerId);
+    if (attacker) attacker.heldWeapon.swing();
     if (attackerId === this.localId) {
       this.game.bus.emit('hitmarker', { comboBonus: false });
       this.game.bus.emit('hit', { damage, headshot });
@@ -4257,7 +4828,7 @@ class MultiplayerManager {
       const p = this.game.player;
       this.net.sendState({
         x: p.position.x, y: p.position.y, z: p.position.z, yaw: p.yaw,
-        moving: p.currentSpeed > 0.1, dashing: p.isDashing, crouching: p.isCrouching, grounded: p.grounded,
+        moving: p.currentSpeed > 0.1, dashing: p.isDashing, sliding: p.isSliding, crouching: p.isCrouching, grounded: p.grounded,
         weaponId: this.game.weaponManager.equipped ? this.game.weaponManager.equipped.id : null,
       });
     }
@@ -4337,6 +4908,7 @@ class Game {
     // fully inert (no network activity, no behavior change) until the
     // player creates/joins a room from the lobby overlay.
     this.multiplayerManager = new MultiplayerManager(this);
+    this.weaponView = new LocalWeaponView(this.player, this.gameRenderer.camera, this.gameRenderer.scene, this.bus);
     this.attackManager.multiplayer = this.multiplayerManager;
     this.pickupManager.network = this.multiplayerManager;
     this.dropManager.network = this.multiplayerManager;
@@ -4408,6 +4980,7 @@ class Game {
       this._dashBtn.classList.toggle('on-cooldown', pct > 0);
     }
 
+    this.weaponView.update(delta);
     this.multiplayerManager.tick(delta, this.gameRenderer.camera);
     this._updateLocalHealthBar();
 
