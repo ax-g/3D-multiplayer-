@@ -19,11 +19,13 @@ const http = require('http');
 
 // Bump when the protocol changes. Shown at the server's web address and sent to
 // clients, so you can tell at a glance whether Render is running the new code.
-const SERVER_VERSION = 'v6-slide';
+const SERVER_VERSION = 'v7-colour';
 // Approved skin IDs — keep in sync with SKIN_CATALOG in index.html. Only these
 // short IDs are ever accepted or relayed; images never travel over the socket.
 const ALLOWED_SKINS = new Set(['default', 'blue_thug', 'pirate_sea']);
 function sanitizeSkin(id) { return typeof id === 'string' && ALLOWED_SKINS.has(id) ? id : 'default'; }
+// Custom body colour: any 24-bit number is fine (it's only a colour); anything else means "the skin's own colour".
+function sanitizeColor(c) { return Number.isInteger(c) && c >= 0 && c <= 0xFFFFFF ? c : null; }
 
 const PORT = process.env.PORT || 8080;
 const MAX_PLAYERS = 8;
@@ -111,7 +113,7 @@ class Room {
 
   // Full one-off snapshot (welcome / player-joined): includes the skin, which
   // is NOT repeated in the 15 Hz state-batch — changes arrive as 'skin-changed'.
-  snapshot(p) { return { ...this.publicState(p), skin: p.skin || 'default' }; }
+  snapshot(p) { return { ...this.publicState(p), skin: p.skin || 'default', color: p.color ?? null }; }
 
   publicState(p) {
     return {
@@ -333,6 +335,8 @@ function onHello(ws, conn, msg) {
     health: 100, maxHealth: 100, alive: true, weaponId: null,
     crouching: false, dashing: false, grounded: true, ready: false,
     skin: sanitizeSkin(msg.skin),
+    color: sanitizeColor(msg.color),
+    lastSkinChange: 0,
     lastAttack: new Map(), // weaponKey -> timestamp
     lastStateTime: Date.now(),
     conn,
@@ -375,10 +379,14 @@ function onStartMatch(conn) {
 function onSkin(conn, msg) {
   const player = getPlayer(conn);
   if (!player || !conn.room) return; // not in a room: nothing to sync (it rides along on the next 'hello')
-  const skin = sanitizeSkin(msg.skin);
-  if (skin === player.skin) return;
+  const now = Date.now();
+  if (now - player.lastSkinChange < 250) return; // a colour slider can't be used to flood the room
+  const skin = sanitizeSkin(msg.skin), color = sanitizeColor(msg.color);
+  if (skin === player.skin && color === player.color) return;
+  player.lastSkinChange = now;
   player.skin = skin;
-  conn.room.broadcast({ t: 'skin-changed', id: player.id, skin });
+  player.color = color;
+  conn.room.broadcast({ t: 'skin-changed', id: player.id, skin, color });
 }
 
 function onReady(conn, msg) {
