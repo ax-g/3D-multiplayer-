@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="3D Multiplayer" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icon-192.png" />
+<link rel="apple-touch-icon" href="icon-192.png" />
 <title>Engine-Free 3D Game Framework</title>
 <style>
 * {
@@ -13,9 +21,12 @@
   user-select: none;
 }
 html, body {
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   background: #000;
   font-family: 'Segoe UI', Arial, sans-serif;
   touch-action: none;
@@ -23,7 +34,7 @@ html, body {
 #rotate-overlay {
   position: fixed;
   top: 0; left: 0;
-  width: 100vw; height: 100vh;
+  width: 100vw; height: 100vh; height: 100dvh;
   background: #0a0a0a;
   color: #fff;
   z-index: 9999;
@@ -45,6 +56,7 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 #game-canvas {
@@ -531,6 +543,15 @@ html, body {
 #mm-skin-img { max-width: 100%; max-height: 100%; }
 #mm-store-name { text-align: center; font-size: 15px; }
 #mm-store-sub { font-size: 11px; opacity: 0.7; text-align: center; white-space: pre-line; line-height: 1.35; max-height: 62px; overflow-y: auto; }
+.mm-store-right { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+#mm-color-row { flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; background: rgba(255,255,255,0.06); border-radius: 10px; }
+.mm-color-label { font-size: 11px; font-weight: 800; letter-spacing: 1px; opacity: 0.7; }
+#mm-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.mm-swatch { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.35); cursor: pointer; padding: 0; color: #fff; font-size: 8px; font-weight: 800; }
+.mm-swatch.auto { background: linear-gradient(135deg, #44c6fc 50%, #3ec8ff 50%, #222 50%); }
+.mm-swatch.sel { border-color: #ffb300; box-shadow: 0 0 0 2px #ffb300; }
+#mm-color-custom { position: relative; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 15px; background: linear-gradient(90deg, #ff4d4d, #ffd24d, #33d17a, #4d79ff, #e05cff); color: #111; font-size: 11px; font-weight: 800; cursor: pointer; }
+#mm-color-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; margin: 0; padding: 0; }
 #mm-store-grid { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; padding-bottom: 8px; }
 .mm-store-card { width: 96px; padding: 10px 4px 6px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 2px solid transparent; color: #fff; font-size: 11px; font-weight: 700; cursor: pointer; text-align: center; }
 .mm-store-card.sel { border-color: #ffb300; background: rgba(255,179,0,0.13); }
@@ -727,6 +748,8 @@ html, body {
           </div>
           <div id="mm-xp" class="mm-xp"></div>
           <div class="mm-spacer"></div>
+          <button id="mm-install-btn" class="mm-icon-btn" style="display:none;">INSTALL APP</button>
+          <button id="mm-fs-btn" class="mm-icon-btn">FULLSCREEN</button>
           <button id="mm-store-btn" class="mm-icon-btn">STORE</button>
           <button id="mm-share-btn" class="mm-icon-btn" style="display:none;">SHARE ID</button>
           <div id="mm-server-pill" class="mm-pill"><span class="mm-dot"></span><span id="mm-server-text">Connecting...</span></div>
@@ -739,6 +762,7 @@ html, body {
               <button id="mm-play-btn" class="mm-btn mm-btn-big">&#9654; PLAY</button>
               <div class="mm-sub">Press Play to start a party, then tap <b>INVITE</b> next to any player.</div>
               <button id="mm-store-open" class="mm-btn mm-btn-ghost">STORE &mdash; skins &amp; weapons</button>
+              <div id="mm-fs-hint" class="mm-sub" style="display:none;"></div>
               <button id="mm-solo-btn" class="mm-btn mm-btn-ghost">Play offline (solo)</button>
             </div>
 
@@ -806,7 +830,14 @@ html, body {
             <div id="mm-store-sub"></div>
             <button id="mm-store-action" class="mm-btn mm-btn-go">EQUIP SKIN</button>
           </div>
-          <div id="mm-store-grid"></div>
+          <div class="mm-store-right">
+            <div id="mm-color-row">
+              <div class="mm-color-label">COLOUR</div>
+              <div id="mm-swatches"></div>
+              <label id="mm-color-custom"><input id="mm-color-input" type="color" value="#44c6fc" /><span>CUSTOM</span></label>
+            </div>
+            <div id="mm-store-grid"></div>
+          </div>
         </div>
       </div>
 
@@ -844,6 +875,7 @@ html, body {
         <h3>Leave the match?</h3>
         <div class="mm-hint">You'll go back to the main menu. Your friends stay in the match.</div>
         <div class="mm-row2">
+          <button id="mm-fs-btn2" class="mm-btn mm-btn-sm mm-btn-ghost">FULLSCREEN</button>
           <button id="mm-leave-yes" class="mm-btn mm-btn-sm mm-btn-warn">LEAVE</button>
           <button id="mm-leave-no" class="mm-btn mm-btn-sm mm-btn-ghost">KEEP PLAYING</button>
         </div>
@@ -1009,11 +1041,12 @@ class FirebaseManager {
   _canPersist() { return fbDb && this.user && !this.user.isGuest; }
 
   // Just the skin ID string; failures are non-fatal (the local copy still works).
-  async saveSkin(id) {
+  async saveSkin(id, color) {
     if (!this.profile) return;
     this.profile.skin = id;
+    this.profile.skinColor = color ?? null;
     if (!this._canPersist()) return;
-    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { skin: id }); }
+    try { await updateDoc(doc(fbDb, 'players', this.user.uid), { skin: id, skinColor: color ?? null }); }
     catch (err) { console.warn('Could not save skin to profile:', err); }
   }
 
@@ -1216,7 +1249,7 @@ const firebaseManager = new FirebaseManager();
 
 const CONFIG = {
   world: { groundSize: 200, groundTextureRepeat: 40 },
-  render: { shadowMapSize: 512, pixelRatioCap: 1, fogNear: 40, fogFar: 160 },
+  render: { shadowMapSize: 512, pixelRatioCap: 1, fogNear: 80, fogFar: 420 },
   player: {
     height: 1.8, radius: 0.35,
     walkSpeed: 3.2, runSpeed: 6.2,
@@ -1358,7 +1391,27 @@ class Skybox {
     cube.colorSpace = THREE.SRGBColorSpace;
     cube.needsUpdate = true;
     scene.background = cube;
+    this._matchFogToHorizon(scene, faces, size);
     if (this.mesh) { scene.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.mesh = null; }
+  }
+
+  // Average colour of the thin band of sky just above the horizon, all the way round.
+  // The ground fades into the fog, so if the fog is exactly this colour the ground
+  // melts into the sky instead of ending in a visible line.
+  _matchFogToHorizon(scene, faces, size) {
+    if (!scene.fog) return;
+    const sideFaces = [0, 1, 4, 5].map((i) => faces[i]); // +X, -X, +Z, -Z (not top/bottom)
+    const y0 = Math.floor(size * 0.44), h = Math.max(2, Math.floor(size * 0.06));
+    let r = 0, g = 0, b = 0, n = 0;
+    try {
+      for (const c of sideFaces) {
+        const data = c.getContext('2d').getImageData(0, y0, size, h).data;
+        for (let i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; n++; }
+      }
+    } catch { return; } // canvas read blocked: keep the preset fog colour
+    if (!n) return;
+    this.fogFromSkybox = true;
+    scene.fog.color.setRGB(r / n / 255, g / n / 255, b / n / 255, THREE.SRGBColorSpace);
   }
 
   _reportSky(message) {
@@ -1439,7 +1492,7 @@ class Skybox {
       const angleRad = THREE.MathUtils.degToRad(preset.sunAngle);
       this.uniforms.sunDirection.value.set(Math.cos(angleRad), Math.sin(angleRad), 0.3).normalize();
     }
-    if (this.scene.fog) this.scene.fog.color.setHex(preset.fogColor);
+    if (this.scene.fog && !this.fogFromSkybox) this.scene.fog.color.setHex(preset.fogColor);
   }
 
   update(delta) {
@@ -1511,6 +1564,24 @@ class World {
     this.ground.userData.isGround = true;
     this.scene.add(this.ground);
     this.groundSize = size;
+
+    // Visual-only continuation of the ground out past the map edge (the 200 m square stays the
+    // playable area). Same texture and material look, tiled at the same density, so the floor
+    // simply runs on until the fog swallows it at the horizon.
+    const FAR = 3000;
+    const farTex = texture.clone();
+    farTex.wrapS = farTex.wrapT = THREE.RepeatWrapping;
+    farTex.repeat.set(repeat * FAR / size, repeat * FAR / size);
+    farTex.anisotropy = 4;
+    farTex.needsUpdate = true;
+    this.farGround = new THREE.Mesh(
+      new THREE.PlaneGeometry(FAR, FAR, 1, 1),
+      new THREE.MeshStandardMaterial({ map: farTex, roughness: 0.95, metalness: 0.02 })
+    );
+    this.farGround.rotation.x = -Math.PI / 2;
+    this.farGround.position.y = -0.03; // just under the real ground so the two never fight
+    this.farGround.receiveShadow = false;
+    this.scene.add(this.farGround);
   }
 
   _generateGroundTexture() {
@@ -2479,6 +2550,20 @@ const SkinSystem = {
     return typeof id === 'string' && Object.prototype.hasOwnProperty.call(SKIN_CATALOG, id) ? id : 'default';
   },
 
+  // A custom body colour is just a 24-bit number (null = the skin's own colour).
+  sanitizeColor(c) { return Number.isInteger(c) && c >= 0 && c <= 0xFFFFFF ? c : null; },
+
+  _tintMats: new Map(), // colour -> shared body material (small and capped, so a flood of colour changes can't pile up)
+  _tintMat(color) {
+    let m = this._tintMats.get(color);
+    if (!m) {
+      if (this._tintMats.size >= 48) this._tintMats.delete(this._tintMats.keys().next().value);
+      m = new THREE.MeshStandardMaterial({ color, roughness: 0.45, metalness: 0.1 });
+      this._tintMats.set(color, m);
+    }
+    return m;
+  },
+
   _loadTexture(skin) {
     if (!this._textures.has(skin.id)) {
       this._textures.set(skin.id, new Promise((resolve) => {
@@ -2667,12 +2752,15 @@ const SkinSystem = {
   _setBodyMaterial(target, mat) { target.bodyMesh.material = mat; target.headMesh.material = mat; },
 
   // target = anything with { bodyMesh (torso), headMesh, defaultMat } — the local Player, every RemotePlayer, the store preview.
-  async apply(target, skinId) {
+  // `color` (optional) recolours the body/head of ANY skin; the decals (glasses, tie, coat) keep their own colours.
+  async apply(target, skinId, color) {
     const skin = SKIN_CATALOG[this.sanitize(skinId)];
+    const tint = this.sanitizeColor(color) === null ? null : this._tintMat(this.sanitizeColor(color));
     const token = (target._skinToken = (target._skinToken || 0) + 1);
     target.skinId = skin.id;
+    target.skinColor = this.sanitizeColor(color);
     this._clearDecals(target);
-    if (!skin.texture) { this._setBodyMaterial(target, target.defaultMat); return; }
+    if (!skin.texture) { this._setBodyMaterial(target, tint || target.defaultMat); return; }
 
     let assets = this._assets.get(skin.id);
     if (!assets) {
@@ -2680,14 +2768,14 @@ const SkinSystem = {
       if (target._skinToken !== token) return;        // a newer apply() for this player won the race
       if (!tex) {                                      // missing texture -> safe fallback, and allow a retry later
         this._textures.delete(skin.id);
-        this._setBodyMaterial(target, target.defaultMat);
+        this._setBodyMaterial(target, tint || target.defaultMat);
         return;
       }
       assets = this._assets.get(skin.id) || this._buildAssets(skin, tex);
       this._assets.set(skin.id, assets);
     }
     this._clearDecals(target);                          // (another apply may have attached during the await)
-    this._setBodyMaterial(target, assets.bodyMat);
+    this._setBodyMaterial(target, tint || assets.bodyMat);
     target._skinDecals = [];
     for (const part of assets.parts) {
       const m = new THREE.Mesh(part.geo, assets.decalMat);
@@ -2768,6 +2856,15 @@ const WeaponModels = {
     root.traverse((o) => {
       if (!o.isMesh || !o.geometry || !o.geometry.attributes.position) return;
       o.castShadow = false; o.receiveShadow = false;
+      // Fully metallic materials render almost BLACK without an environment map to reflect (this scene
+      // has none), which is why a shiny sword looked like a dark silhouette. Keep the colour, cut the metal.
+      for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
+        if (m && (m.isMeshStandardMaterial || m.isMeshPhysicalMaterial)) {
+          m.metalness = Math.min(m.metalness ?? 0, 0.3);
+          m.roughness = Math.max(m.roughness ?? 1, 0.45);
+          m.needsUpdate = true;
+        }
+      }
       const p = o.geometry.attributes.position;
       const step = Math.max(1, Math.floor(p.count / 800));
       for (let i = 0; i < p.count; i += step) pts.push(v.fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld).clone());
@@ -2979,6 +3076,66 @@ class ModelPreview {
     try { this.renderer.dispose(); this.renderer.forceContextLoss(); } catch { /* nothing to free */ }
   }
 }
+
+// Full screen without the browser's address bar. Browsers only allow the Fullscreen API
+// from a tap, so the first tap anywhere asks for it; the FULLSCREEN button does it on
+// demand. iPhones refuse the API for web pages, so "Add to Home Screen" (the game ships a
+// manifest with display: fullscreen) is the way there — that also works on Android and
+// gives a real app window with no address bar at all.
+const FullscreenManager = {
+  _declined: false, _wasActive: false, _installEvent: null,
+
+  supported() { const el = document.documentElement; return !!(el.requestFullscreen || el.webkitRequestFullscreen); },
+  isStandalone() {
+    return window.matchMedia('(display-mode: fullscreen)').matches || window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  },
+  active() { return !!(document.fullscreenElement || document.webkitFullscreenElement) || this.isStandalone(); },
+
+  async enter() {
+    this._declined = false;
+    const el = document.documentElement;
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen({ navigationUI: 'hide' });
+      else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      else return false;
+    } catch (err) { console.warn('Fullscreen was refused:', err); return false; }
+    try { await screen.orientation.lock('landscape'); } catch { /* not permitted on this device: fine */ }
+    return true;
+  },
+  async exit() {
+    this._declined = true; // leaving on purpose: don't drag them back in on the next tap
+    try { if (document.exitFullscreen) await document.exitFullscreen(); else if (document.webkitExitFullscreen) document.webkitExitFullscreen(); } catch { /* ignore */ }
+  },
+  toggle() { return (this.active() && !this.isStandalone()) ? this.exit() : this.enter(); },
+
+  async install() {
+    const e = this._installEvent;
+    if (!e) return false;
+    e.prompt();
+    const choice = await e.userChoice.catch(() => null);
+    this._installEvent = null;
+    return !!choice && choice.outcome === 'accepted';
+  },
+
+  init(onChange) {
+    document.addEventListener('pointerup', () => {
+      if (!this._declined && this.supported() && !this.active()) this.enter();
+    });
+    const changed = () => {
+      const now = this.active();
+      if (this._wasActive && !now) this._declined = true; // they backed out of full screen
+      this._wasActive = now;
+      onChange();
+    };
+    document.addEventListener('fullscreenchange', changed);
+    document.addEventListener('webkitfullscreenchange', changed);
+    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); this._installEvent = e; onChange(); });
+    window.addEventListener('appinstalled', () => { this._installEvent = null; onChange(); });
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => { /* install prompt just won't be offered */ });
+    this._wasActive = this.active();
+    onChange();
+  },
+};
 
 // Wraps an angle difference into [-π, π) in constant time regardless of
 // how large the input is. Used instead of the classic "while (diff > PI)
@@ -3548,6 +3705,7 @@ class NetworkManager {
     this.name = 'Player';
     this.playerId = null;
     this.skin = 'default';   // equipped skin ID (server validates it)
+    this.color = null;       // optional custom body colour (24-bit number)
     this.room = '';          // room code the server assigned us (kept for auto-rejoin after a drop)
     this._wantRoom = false;  // true while we should be (re)joined to a room
     this._listeners = new Map();
@@ -3595,7 +3753,7 @@ class NetworkManager {
   joinRoom(room) {
     this._wantRoom = true;
     this.room = room || '';
-    this._send({ t: 'hello', name: this.name, room: this.room, skin: this.skin });
+    this._send({ t: 'hello', name: this.name, room: this.room, skin: this.skin, color: this.color });
   }
 
   leaveRoom() {
@@ -3633,7 +3791,7 @@ class NetworkManager {
       this._reconnectAttempts = 0;
       this._send({ t: 'hub-hello', name: this.name, playerId: this.playerId });
       // After a dropped connection, silently re-enter the room we were in.
-      if (this._wantRoom && this.room) this._send({ t: 'hello', name: this.name, room: this.room, skin: this.skin });
+      if (this._wantRoom && this.room) this._send({ t: 'hello', name: this.name, room: this.room, skin: this.skin, color: this.color });
       clearInterval(this._pingInterval);
       this._pingInterval = setInterval(() => this._send({ t: 'ping', time: Date.now() }), 5000);
       this._emit('open', {});
@@ -3851,8 +4009,12 @@ class MultiplayerManager {
     let savedSkin = 'default';
     try { savedSkin = localStorage.getItem('mp-skin') || 'default'; } catch { /* ignore */ }
     this.localSkin = SkinSystem.sanitize(savedSkin);
+    let savedColor = null;
+    try { const c = localStorage.getItem('mp-color'); savedColor = c === null || c === '' ? null : parseInt(c, 10); } catch { /* ignore */ }
+    this.localColor = SkinSystem.sanitizeColor(savedColor);
     this.net.skin = this.localSkin;
-    SkinSystem.apply(this.game.player, this.localSkin);
+    this.net.color = this.localColor;
+    SkinSystem.apply(this.game.player, this.localSkin, this.localColor);
 
     // Best-effort clean disconnect so other clients don't have to wait on
     // the server's stale-connection timeout to remove us (avoids "ghost
@@ -3895,9 +4057,17 @@ class MultiplayerManager {
     this._$('mm-leave-btn').addEventListener('click', () => this._leaveParty());
     this._$('mm-id-btn').addEventListener('click', () => this._onIdChipClick());
     this._$('mm-store-btn').addEventListener('click', () => this._openStore());
+    this._$('mm-fs-btn').addEventListener('click', () => FullscreenManager.toggle());
+    this._$('mm-fs-btn2').addEventListener('click', () => { FullscreenManager.toggle(); this._$('mm-leave-confirm').style.display = 'none'; });
+    this._$('mm-install-btn').addEventListener('click', () => FullscreenManager.install());
+    FullscreenManager.init(() => this._refreshFsUi());
     this._$('mm-store-open').addEventListener('click', () => this._openStore());
     this._$('mm-store-back').addEventListener('click', () => this._closeStore());
     this._$('mm-store-action').addEventListener('click', () => this._equipSelectedSkin());
+    this._$('mm-color-input').addEventListener('input', (e) => {
+      clearTimeout(this._colorTimer); // the native picker fires constantly while dragging; settle first
+      this._colorTimer = setTimeout(() => this._pickColor(parseInt(e.target.value.slice(1), 16)), 120);
+    });
     document.querySelectorAll('.mm-stab').forEach((b) => b.addEventListener('click', () => { this._storeTab = b.dataset.stab; this._renderStore(); }));
     this._$('mm-share-btn').addEventListener('click', () => this._shareMyId());
     this._$('mm-add-btn').addEventListener('click', () => this._addFriendFromInput());
@@ -3937,6 +4107,25 @@ class MultiplayerManager {
     else if (!/^wss?:\/\//i.test(u)) u = 'wss://' + u;
     return u.replace(/\/+$/, '');
   }
+  _refreshFsUi() {
+    const standalone = FullscreenManager.isStandalone();
+    const fsBtn = this._$('mm-fs-btn'), fsBtn2 = this._$('mm-fs-btn2');
+    const showFs = FullscreenManager.supported() && !standalone;
+    const label = FullscreenManager.active() ? 'EXIT FULLSCREEN' : 'FULLSCREEN';
+    fsBtn.style.display = showFs ? '' : 'none';
+    fsBtn2.style.display = showFs ? '' : 'none';
+    fsBtn.textContent = label; fsBtn2.textContent = label;
+    this._$('mm-install-btn').style.display = (FullscreenManager._installEvent && !standalone) ? '' : 'none';
+    const hint = this._$('mm-fs-hint');
+    if (standalone || FullscreenManager._installEvent) hint.style.display = 'none';
+    else {
+      hint.style.display = 'block';
+      hint.textContent = FullscreenManager.supported()
+        ? 'Tip: browser menu \u2192 Add to Home screen gives a full-screen app with no address bar.'
+        : 'iPhone: tap Share \u2192 Add to Home Screen, then open it from your home screen for full screen.';
+    }
+  }
+
   _serverUrl() { return this._normalizeUrl(this._savedServer || DEFAULT_SERVER_URL); }
   _openSettings() {
     this._$('mm-server-input').value = this._savedServer || DEFAULT_SERVER_URL || '';
@@ -3986,8 +4175,10 @@ class MultiplayerManager {
     for (const weaponId of (profile.inventory || [])) this.game.weaponManager.addWeapon(weaponId);
     if (this._isAccount) {
       // The saved profile is the source of truth for accounts; if it has none yet, save what this device uses.
-      if (profile.skin) { if (SkinSystem.sanitize(profile.skin) !== this.localSkin) this._setLocalSkin(profile.skin, false); }
-      else if (this.localSkin !== 'default') firebaseManager.saveSkin(this.localSkin);
+      if (profile.skin) {
+        const pc = SkinSystem.sanitizeColor(profile.skinColor);
+        if (SkinSystem.sanitize(profile.skin) !== this.localSkin || pc !== this.localColor) this._setLocalSkin(profile.skin, pc, false);
+      } else if (this.localSkin !== 'default' || this.localColor !== null) firebaseManager.saveSkin(this.localSkin, this.localColor);
     }
     this._connectHub();
   }
@@ -4189,6 +4380,7 @@ class MultiplayerManager {
   // ---------- Store: skins + weapon models ----------
   _openStore(tab) {
     this._storeTab = tab || this._storeTab || 'skins';
+    this._previewColor = this.localColor;
     this._$('mm-store').style.display = 'flex';
     this._renderStore();
   }
@@ -4214,6 +4406,8 @@ class MultiplayerManager {
       card.addEventListener('click', () => this._selectStoreItem(it.id));
       grid.appendChild(card);
     }
+    this._$('mm-color-row').style.display = this._storeTab === 'skins' ? 'flex' : 'none';
+    if (this._storeTab === 'skins') this._renderColorRow();
     this._selectStoreItem(this._storeTab === 'skins' ? this.localSkin : items[0].id);
   }
 
@@ -4232,10 +4426,8 @@ class MultiplayerManager {
       name.textContent = skin.name;
       sub.textContent = skin.blurb || '';
       action.style.display = 'block';
-      const equipped = skin.id === this.localSkin;
-      action.disabled = equipped;
-      action.textContent = equipped ? 'EQUIPPED' : 'EQUIP SKIN';
-      if (this._showPreview(this._skinDummy().group, 'sway')) SkinSystem.apply(this._dummy.target, skin.id);
+      this._updateEquipButton();
+      if (this._showPreview(this._skinDummy().group, 'sway')) SkinSystem.apply(this._dummy.target, skin.id, this._previewColor);
       else this._previewFallback(skin.preview);
     } else {
       const w = WEAPON_DATABASE[id];
@@ -4308,23 +4500,64 @@ class MultiplayerManager {
     return this._dummy;
   }
 
+  _updateEquipButton() {
+    const action = this._$('mm-store-action');
+    const same = this._previewSkin === this.localSkin && this._previewColor === this.localColor;
+    action.disabled = same;
+    action.textContent = same ? 'EQUIPPED' : 'EQUIP';
+  }
+
+  // Colour row: "AUTO" keeps the skin's own colour; the swatches and the CUSTOM picker recolour the body of any skin.
+  _renderColorRow() {
+    const PALETTE = [0xff4d4d, 0xff944d, 0xffd24d, 0x9be34d, 0x33d17a, 0x2ec4b6, 0x4dc3ff, 0x4d79ff, 0x9b6bff, 0xe05cff, 0xff5cae, 0xffffff, 0x9aa0a6, 0x2b2f36];
+    const box = this._$('mm-swatches');
+    box.innerHTML = '';
+    const add = (value, label) => {
+      const b = document.createElement('button');
+      b.className = 'mm-swatch' + (value === null ? ' auto' : '');
+      b.dataset.color = value === null ? '' : String(value);
+      b.setAttribute('aria-label', label);
+      if (value !== null) b.style.background = '#' + value.toString(16).padStart(6, '0');
+      else b.textContent = 'AUTO';
+      b.addEventListener('click', () => this._pickColor(value));
+      box.appendChild(b);
+    };
+    add(null, 'Skin colour');
+    for (const c of PALETTE) add(c, 'Colour');
+    this._markColor();
+  }
+  _markColor() {
+    const cur = this._previewColor === null ? '' : String(this._previewColor);
+    for (const b of this._$('mm-swatches').children) b.classList.toggle('sel', b.dataset.color === cur);
+    if (this._previewColor !== null) this._$('mm-color-input').value = '#' + this._previewColor.toString(16).padStart(6, '0');
+  }
+  _pickColor(color) {
+    this._previewColor = SkinSystem.sanitizeColor(color);
+    this._markColor();
+    if (this._dummy) SkinSystem.apply(this._dummy.target, this._previewSkin, this._previewColor);
+    this._updateEquipButton();
+  }
+
   _equipSelectedSkin() {
-    this._setLocalSkin(this._previewSkin, true);
+    this._setLocalSkin(this._previewSkin, this._previewColor, true);
     this._selectStoreItem(this._previewSkin);
     this._showToast(`${SKIN_CATALOG[this.localSkin].name} equipped`);
   }
 
-  // Applies a skin to our own player, remembers it, tells the room (the server
-  // validates the ID and relays only the ID to everyone), and saves it to the
+  // Applies a skin (and optional custom colour) to our own player, remembers it, tells the room
+  // (the server validates both and relays only the skin ID + colour number), and saves it to the
   // profile when signed in.
-  _setLocalSkin(id, persist) {
+  _setLocalSkin(id, color, persist) {
     id = SkinSystem.sanitize(id);
+    color = SkinSystem.sanitizeColor(color);
     this.localSkin = id;
+    this.localColor = color;
     this.net.skin = id;
-    try { localStorage.setItem('mp-skin', id); } catch { /* ignore */ }
-    SkinSystem.apply(this.game.player, id);
-    this.net.sendRaw({ t: 'skin', skin: id }); // ignored by the server unless we're in a room
-    if (persist && this._isAccount) firebaseManager.saveSkin(id);
+    this.net.color = color;
+    try { localStorage.setItem('mp-skin', id); localStorage.setItem('mp-color', color === null ? '' : String(color)); } catch { /* ignore */ }
+    SkinSystem.apply(this.game.player, id, color);
+    this.net.sendRaw({ t: 'skin', skin: id, color }); // ignored by the server unless we're in a room
+    if (persist && this._isAccount) firebaseManager.saveSkin(id, color);
   }
 
   // ---------- Party (lobby): create, invite, ready, start ----------
@@ -4583,7 +4816,7 @@ class MultiplayerManager {
     n.on('player-joined', (msg) => this._onPlayerJoined(msg.player));
     n.on('player-left', (msg) => this._onPlayerLeft(msg.id));
     n.on('lobby-state', (msg) => this._onLobbyState(msg));
-    n.on('skin-changed', (msg) => { const rp = this.remotePlayers.get(msg.id); if (rp) SkinSystem.apply(rp, msg.skin); });
+    n.on('skin-changed', (msg) => { const rp = this.remotePlayers.get(msg.id); if (rp) SkinSystem.apply(rp, msg.skin, msg.color); });
     n.on('match-started', () => this._onMatchStarted());
     n.on('state-batch', (msg) => this._onStateBatch(msg.players, msg.bots));
     n.on('attack-result', (msg) => this._onAttackResult(msg));
@@ -4668,9 +4901,9 @@ class MultiplayerManager {
 
   _onPlayerJoined(p, silent) {
     const existing = this.remotePlayers.get(p.id);
-    if (existing) { if (p.skin) SkinSystem.apply(existing, p.skin); return; }
+    if (existing) { if (p.skin) SkinSystem.apply(existing, p.skin, p.color); return; }
     const rp = new RemotePlayer(this.game.gameRenderer.scene, p, this._colorCounter++);
-    SkinSystem.apply(rp, p.skin); // initial player data carries the skin id, so late joiners see everyone's skin
+    SkinSystem.apply(rp, p.skin, p.color); // initial player data carries skin + colour, so late joiners see everyone's look
     if (p.weaponId) { rp.weaponId = p.weaponId; rp.heldWeapon.setWeapon(p.weaponId); }
     this.remotePlayers.set(p.id, rp);
     this.game.world.remotePlayers.push(rp);
